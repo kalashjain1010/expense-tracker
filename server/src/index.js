@@ -4,11 +4,15 @@ import cors from 'cors'
 import express from 'express'
 import {
   authedClientForUser,
+  decodeMobileOAuthState,
+  encodeMobileOAuthState,
   getAuthUrl,
   handleOAuthCallback,
   mobileAppRedirectBase,
   mobileOAuthRedirectUri,
+  mobileOAuthReturnUrl,
   oauthConfigured,
+  resolveMobileAppReturnTo,
 } from './auth.js'
 import { deleteSession, getSession, setUserSpreadsheet } from './db.js'
 import {
@@ -154,24 +158,51 @@ app.get('/auth/google/callback', async (req, res) => {
 })
 
 /** Mobile app OAuth — ends with deep link carrying Bearer session token */
-app.get('/auth/google/mobile', (_req, res) => {
+app.get('/auth/google/mobile', (req, res) => {
   if (!oauthConfigured()) {
     return res.status(503).send('Google OAuth is not configured.')
   }
-  res.redirect(getAuthUrl(mobileOAuthRedirectUri()))
+  const appReturn = resolveMobileAppReturnTo(req.query.return_to)
+  const state = encodeMobileOAuthState(appReturn)
+  res.redirect(getAuthUrl(mobileOAuthRedirectUri(), state))
 })
 
 app.get('/auth/google/mobile/callback', async (req, res) => {
+  const appReturn =
+    decodeMobileOAuthState(req.query.state) || mobileAppRedirectBase().split('?')[0]
   try {
     const code = req.query.code
     if (!code) throw new Error('Missing code')
     const { sessionId } = await handleOAuthCallback(String(code), mobileOAuthRedirectUri())
-    const deep = `${mobileAppRedirectBase()}?token=${encodeURIComponent(sessionId)}`
+    const deep = mobileOAuthReturnUrl(appReturn, { token: sessionId })
     res.redirect(deep)
   } catch (err) {
     console.error(err)
-    const deep = `${mobileAppRedirectBase()}?error=${encodeURIComponent(err.message || 'Auth failed')}`
+    const deep = mobileOAuthReturnUrl(appReturn, {
+      error: err.message || 'Auth failed',
+    })
     res.redirect(deep)
+  }
+})
+
+/** Mobile WebView: exchange Bearer session token for signed cookie, then open full web UI */
+app.get('/auth/mobile/enter', async (req, res) => {
+  try {
+    const token = String(req.query.token || '').trim()
+    if (!token) return res.redirect(`${ORIGIN}/?error=${encodeURIComponent('Missing session')}`)
+    const user = await getSession(token)
+    if (!user) return res.redirect(`${ORIGIN}/?error=${encodeURIComponent('Session expired')}`)
+    res.cookie(COOKIE, token, {
+      httpOnly: true,
+      signed: true,
+      sameSite: 'lax',
+      secure: isProd,
+      maxAge: 1000 * 60 * 60 * 24 * 30,
+    })
+    res.redirect(`${ORIGIN}/`)
+  } catch (err) {
+    console.error(err)
+    res.redirect(`${ORIGIN}/?error=${encodeURIComponent(err.message || 'Auth failed')}`)
   }
 })
 
@@ -271,6 +302,7 @@ app.post('/api/expense/import-suggest', requireUser, async (req, res) => {
     const amount = Number(req.body?.amount) || 0
     const date = String(req.body?.date || '').slice(0, 10)
     const upiRef = String(req.body?.upiRef || '')
+    const body = String(req.body?.body || req.body?.rawPreview || req.body?.sms || '')
     const noteDraft = [merchant && `UPI ${merchant}`, amount && `₹${amount}`, upiRef && `(${upiRef})`]
       .filter(Boolean)
       .join(' ')
@@ -278,6 +310,7 @@ app.post('/api/expense/import-suggest', requireUser, async (req, res) => {
       merchant,
       amount,
       note: noteDraft,
+      body: body || noteDraft,
     })
     res.json({
       ok: true,
