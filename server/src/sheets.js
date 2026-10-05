@@ -633,7 +633,8 @@ export async function createBlankKharchaSpreadsheet(auth, title = 'Expense Track
     requestBody: {
       properties: {
         title,
-        locale: 'en_IN',
+        // Sheets API does not support en_IN; en_GB keeps day-first dates + ₹ formats we set.
+        locale: 'en_GB',
         timeZone: 'Asia/Kolkata',
       },
       sheets: [
