@@ -676,29 +676,80 @@ export async function copyTemplateSpreadsheet(auth, templateId, title = 'Expense
   return { spreadsheetId, spreadsheetUrl }
 }
 
-export async function ensureUserSpreadsheet(auth, user) {
-  if (user?.spreadsheet_id) {
-    try {
-      await styleSpreadsheet(auth, user.spreadsheet_id)
-    } catch (err) {
-      console.warn('styleSpreadsheet skipped:', err.message)
-    }
-    return {
-      spreadsheetId: user.spreadsheet_id,
-      spreadsheetUrl: user.spreadsheet_url || `https://docs.google.com/spreadsheets/d/${user.spreadsheet_id}/edit`,
-    }
+export function isSpreadsheetMissingError(err) {
+  const msg = String(err?.message || err || '')
+  const code = err?.code || err?.response?.status
+  return (
+    code === 404 ||
+    /Requested entity was not found/i.test(msg) ||
+    (/not found/i.test(msg) && /spreadsheet|file|entity/i.test(msg)) ||
+    /File not found/i.test(msg)
+  )
+}
+
+async function spreadsheetStillExists(auth, spreadsheetId) {
+  if (!spreadsheetId) return false
+  try {
+    const sheets = sheetsApi(auth)
+    await sheets.spreadsheets.get({
+      spreadsheetId,
+      fields: 'spreadsheetId',
+    })
+    return true
+  } catch (err) {
+    if (isSpreadsheetMissingError(err)) return false
+    throw err
   }
+}
+
+/**
+ * Return user's sheet, or create a fresh empty Expense Tracker sheet if missing/deleted.
+ * @param {{ polish?: boolean }} opts - polish=true restyles an existing sheet (login / repair)
+ */
+export async function ensureUserSpreadsheet(auth, user, opts = {}) {
+  const polish = Boolean(opts.polish)
+
+  if (user?.spreadsheet_id) {
+    const exists = await spreadsheetStillExists(auth, user.spreadsheet_id)
+    if (exists) {
+      if (polish) {
+        try {
+          await styleSpreadsheet(auth, user.spreadsheet_id)
+        } catch (err) {
+          if (!isSpreadsheetMissingError(err)) {
+            console.warn('styleSpreadsheet skipped:', err.message)
+          } else {
+            // Deleted between check and style — fall through to recreate
+            const created = await createBlankKharchaSpreadsheet(auth, 'Expense Tracker')
+            return { ...created, recreated: true }
+          }
+        }
+      }
+      return {
+        spreadsheetId: user.spreadsheet_id,
+        spreadsheetUrl:
+          user.spreadsheet_url ||
+          `https://docs.google.com/spreadsheets/d/${user.spreadsheet_id}/edit`,
+        recreated: false,
+      }
+    }
+    // Deleted — create a new empty sheet
+    const created = await createBlankKharchaSpreadsheet(auth, 'Expense Tracker')
+    return { ...created, recreated: true }
+  }
+
   const templateId = process.env.TEMPLATE_SPREADSHEET_ID
   if (templateId) {
-    const copied = await copyTemplateSpreadsheet(auth, templateId)
     try {
+      const copied = await copyTemplateSpreadsheet(auth, templateId)
       await styleSpreadsheet(auth, copied.spreadsheetId)
+      return { ...copied, recreated: false }
     } catch (err) {
-      console.warn('styleSpreadsheet skipped:', err.message)
+      console.warn('template copy failed, creating blank:', err.message)
     }
-    return copied
   }
-  return createBlankKharchaSpreadsheet(auth)
+  const created = await createBlankKharchaSpreadsheet(auth, 'Expense Tracker')
+  return { ...created, recreated: false }
 }
 
 function findLastRowForDate(rows, dateObj) {

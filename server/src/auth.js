@@ -66,7 +66,7 @@ export async function handleOAuthCallback(code) {
   })
 
   client.setCredentials({ refresh_token: refreshToken })
-  const sheet = await ensureUserSpreadsheet(client, getUser(profile.id))
+  const sheet = await ensureUserSpreadsheet(client, getUser(profile.id), { polish: true })
   if (sheet?.spreadsheetId) {
     setUserSpreadsheet(profile.id, sheet.spreadsheetId, sheet.spreadsheetUrl)
   }

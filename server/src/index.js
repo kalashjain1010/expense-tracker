@@ -8,14 +8,16 @@ import {
   handleOAuthCallback,
   oauthConfigured,
 } from './auth.js'
-import { deleteSession, getSession } from './db.js'
+import { deleteSession, getSession, setUserSpreadsheet } from './db.js'
 import {
   addCreditCard,
   addExpense,
   addIncome,
   buildSummary,
+  ensureUserSpreadsheet,
   getEntry,
   getMonthDetail,
+  isSpreadsheetMissingError,
   styleSpreadsheet,
 } from './sheets.js'
 
@@ -54,6 +56,18 @@ function requireUser(req, res, next) {
   next()
 }
 
+/** If Drive file was deleted, create a fresh empty sheet and remember it. */
+async function recoverSpreadsheetIfNeeded(req, { polish = false } = {}) {
+  const auth = authedClientForUser(req.user)
+  const sheet = await ensureUserSpreadsheet(auth, req.user, { polish })
+  if (sheet.recreated || sheet.spreadsheetId !== req.user.spreadsheet_id) {
+    setUserSpreadsheet(req.user.google_id, sheet.spreadsheetId, sheet.spreadsheetUrl)
+    req.user.spreadsheet_id = sheet.spreadsheetId
+    req.user.spreadsheet_url = sheet.spreadsheetUrl
+  }
+  return sheet
+}
+
 app.get('/health', (_req, res) => {
   res.json({ ok: true, oauth: oauthConfigured() })
 })
@@ -90,21 +104,49 @@ app.post('/auth/logout', requireUser, (req, res) => {
   res.json({ ok: true })
 })
 
-app.get('/api/me', (req, res) => {
+app.get('/api/me', async (req, res) => {
   const sid = req.signedCookies?.[COOKIE] || req.cookies?.[COOKIE]
   if (!sid) return res.json({ ok: true, data: { user: null } })
   const user = getSession(sid)
-  res.json({ ok: true, data: { user: publicUser(user) } })
+  if (!user) return res.json({ ok: true, data: { user: null } })
+
+  try {
+    req.user = user
+    const sheet = await recoverSpreadsheetIfNeeded(req, { polish: false })
+    res.json({
+      ok: true,
+      data: {
+        user: publicUser(req.user),
+        sheetRecreated: Boolean(sheet.recreated),
+      },
+    })
+  } catch (err) {
+    console.error(err)
+    res.json({ ok: true, data: { user: publicUser(user) } })
+  }
 })
 
 async function withSheets(req, res, fn) {
   try {
+    await recoverSpreadsheetIfNeeded(req)
     if (!req.user.spreadsheet_id) {
-      return res.status(400).json({ ok: false, error: 'No spreadsheet linked yet. Sign out and sign in again.' })
+      return res.status(400).json({ ok: false, error: 'Could not create spreadsheet. Try signing in again.' })
     }
     const auth = authedClientForUser(req.user)
-    const data = await fn(auth, req.user.spreadsheet_id, req.body || {})
-    res.json({ ok: true, data })
+    try {
+      const data = await fn(auth, req.user.spreadsheet_id, req.body || {})
+      return res.json({ ok: true, data })
+    } catch (err) {
+      if (!isSpreadsheetMissingError(err)) throw err
+      // Deleted mid-request — recreate once and retry
+      const auth2 = authedClientForUser(req.user)
+      const created = await ensureUserSpreadsheet(auth2, { ...req.user, spreadsheet_id: null })
+      setUserSpreadsheet(req.user.google_id, created.spreadsheetId, created.spreadsheetUrl)
+      req.user.spreadsheet_id = created.spreadsheetId
+      req.user.spreadsheet_url = created.spreadsheetUrl
+      const data = await fn(auth2, created.spreadsheetId, req.body || {})
+      return res.json({ ok: true, data, sheetRecreated: true })
+    }
   } catch (err) {
     console.error(err)
     res.status(400).json({ ok: false, error: err.message || String(err) })
