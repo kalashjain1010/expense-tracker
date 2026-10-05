@@ -10,8 +10,11 @@ const emptyCats = () => Object.fromEntries(EXPENSE_CATEGORIES.map((c) => [c, '']
 
 function catsFromEntry(categories = {}) {
   const next = emptyCats()
+  const lowerMap = Object.fromEntries(
+    Object.entries(categories || {}).map(([k, v]) => [String(k).toLowerCase(), v]),
+  )
   EXPENSE_CATEGORIES.forEach((c) => {
-    const v = categories[c]
+    const v = categories[c] ?? lowerMap[c.toLowerCase()]
     next[c] = v === 0 || v === '' || v == null ? '' : String(v)
   })
   return next
@@ -34,25 +37,25 @@ export default function ExpensePage() {
     [categories],
   )
 
-  // Clear fields as soon as the date changes so we never show another day's values
+  // Prefill as soon as entry data for THIS date is available (don't wait out loading if cache hit)
   useEffect(() => {
-    setCategories(emptyCats())
-    setNote('')
     setStatus(null)
-  }, [date])
-
-  useEffect(() => {
-    if (loading) return
-    if (!existing) return
-    if (existing.date && existing.date !== date) return
+    if (!existing || (existing.date && existing.date !== date)) {
+      // Date changed / no data yet — clear so we don't flash another day's values
+      if (!loading) {
+        setCategories(emptyCats())
+        setNote('')
+      }
+      return
+    }
     if (existing.found) {
       setCategories(catsFromEntry(existing.categories))
       setNote(existing.note || '')
-    } else {
+    } else if (!loading && !refreshing) {
       setCategories(emptyCats())
       setNote('')
     }
-  }, [existing, date, loading])
+  }, [existing, date, loading, refreshing])
 
   useEffect(() => {
     if (loadError) setStatus({ type: 'error', message: loadError })
@@ -85,7 +88,7 @@ export default function ExpensePage() {
   }
 
   const matched = Boolean(existing && (!existing.date || existing.date === date))
-  const editing = Boolean(matched && existing.found && !loading)
+  const editing = Boolean(matched && existing.found && !(loading && !matched))
   const loadingEntry = loading && !matched
   const busy = saving || loadingEntry
 

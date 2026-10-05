@@ -15,29 +15,27 @@ export default function CreditPage() {
   const { data: existing, loading, refreshing, error: loadError } = useEntry('credit', date)
 
   const matched = Boolean(existing && (!existing.date || existing.date === date))
-  const editing = Boolean(matched && existing.found && !loading)
+  const editing = Boolean(matched && existing.found && !(loading && !matched))
   const loadingEntry = loading && !matched
   const busy = saving || loadingEntry
 
-  // Clear fields as soon as the date changes so we never show another day's values
   useEffect(() => {
-    setTotal('')
-    setItems('')
     setStatus(null)
-  }, [date])
-
-  useEffect(() => {
-    if (loading) return
-    if (!existing) return
-    if (existing.date && existing.date !== date) return
+    if (!existing || (existing.date && existing.date !== date)) {
+      if (!loading) {
+        setTotal('')
+        setItems('')
+      }
+      return
+    }
     if (existing.found) {
       setTotal(existing.total === '' || existing.total == null ? '' : String(existing.total))
       setItems(existing.items || '')
-    } else {
+    } else if (!loading && !refreshing) {
       setTotal('')
       setItems('')
     }
-  }, [existing, date, loading])
+  }, [existing, date, loading, refreshing])
 
   useEffect(() => {
     if (loadError) setStatus({ type: 'error', message: loadError })

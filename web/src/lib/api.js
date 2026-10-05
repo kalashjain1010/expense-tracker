@@ -44,6 +44,11 @@ export async function fetchEntry(type, date) {
 
 export async function addExpense(payload) {
   const data = await api('/api/expense', { method: 'POST', body: JSON.stringify(payload) })
+  const categories = {}
+  Object.entries(payload.categories || {}).forEach(([k, v]) => {
+    const n = Number(v)
+    if (Number.isFinite(n) && n !== 0) categories[k] = n
+  })
   invalidateAfterWrite({
     type: 'expense',
     date: payload.date,
@@ -54,7 +59,7 @@ export async function addExpense(payload) {
       row: data.row,
       count: 1,
       total: data.total,
-      categories: payload.categories,
+      categories,
       note: payload.note || '',
     },
   })

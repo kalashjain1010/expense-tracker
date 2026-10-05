@@ -86,13 +86,18 @@ async function recoverSpreadsheetIfNeeded(req, { polish = false, checkExists = f
 /** Apply column widths / alignment at most once per layout version (not every page load). */
 async function maybeApplySheetChrome(req) {
   if (!req.user?.spreadsheet_id) return
-  if (layoutApplied.get(req.user.google_id) === SHEET_LAYOUT_VERSION) return
+  const id = req.user.google_id
+  const state = layoutApplied.get(id)
+  if (state === SHEET_LAYOUT_VERSION) return
+  if (typeof state === 'number' && state > Date.now()) return // quota backoff
   try {
     const auth = authedClientForUser(req.user)
     await applySheetChrome(auth, req.user.spreadsheet_id)
-    layoutApplied.set(req.user.google_id, SHEET_LAYOUT_VERSION)
+    layoutApplied.set(id, SHEET_LAYOUT_VERSION)
   } catch (err) {
     if (isQuotaError(err)) {
+      // Don't retry chrome for 2 minutes — keeps Home/entry reads working
+      layoutApplied.set(id, Date.now() + 2 * 60 * 1000)
       console.warn('applySheetChrome deferred (quota):', err.message)
       return
     }
@@ -156,10 +161,11 @@ async function withSheets(req, res, fn) {
     if (!req.user.spreadsheet_id) {
       return res.status(400).json({ ok: false, error: 'Could not create spreadsheet. Try signing in again.' })
     }
-    await maybeApplySheetChrome(req)
     const auth = authedClientForUser(req.user)
     try {
+      // Read/write first — never block Home/entry behind layout chrome (quota)
       const data = await fn(auth, req.user.spreadsheet_id, req.body || {})
+      maybeApplySheetChrome(req).catch((err) => console.warn('chrome:', err.message))
       return res.json({ ok: true, data })
     } catch (err) {
       if (isQuotaError(err)) {
@@ -169,7 +175,6 @@ async function withSheets(req, res, fn) {
         })
       }
       if (!isSpreadsheetMissingError(err)) throw err
-      // Deleted mid-request — recreate once and retry
       const auth2 = authedClientForUser(req.user)
       const created = await ensureUserSpreadsheet(auth2, { ...req.user, spreadsheet_id: null })
       setUserSpreadsheet(req.user.google_id, created.spreadsheetId, created.spreadsheetUrl)

@@ -47,8 +47,8 @@ const TAB_COLORS = {
   [SHEET_CC]: { red: 0.55, green: 0.4, blue: 0.2 },
 }
 
-/** Bump when column widths / default alignment change — applied once per user. */
-export const SHEET_LAYOUT_VERSION = 3
+/** Bump when column widths / default alignment / banner formulas change — applied once per user. */
+export const SHEET_LAYOUT_VERSION = 4
 
 const SHEET_LAYOUT = {
   [SHEET_EXPENSE]: {
@@ -113,19 +113,67 @@ function sameDay(a, b) {
   return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
+function monthIndexFromName(name) {
+  const key = String(name || '')
+    .toLowerCase()
+    .replace(/\./g, '')
+  const names = [
+    'january',
+    'february',
+    'march',
+    'april',
+    'may',
+    'june',
+    'july',
+    'august',
+    'september',
+    'october',
+    'november',
+    'december',
+  ]
+  const short = names.map((n) => n.slice(0, 3))
+  const i = names.indexOf(key)
+  if (i >= 0) return i
+  const j = short.indexOf(key.slice(0, 3))
+  return j >= 0 ? j : -1
+}
+
 function coerceDate(v) {
   if (v == null || v === '') return null
-  if (v instanceof Date && !Number.isNaN(v.getTime())) return v
-  if (typeof v === 'number') {
-    // Sheets serial
-    const d = new Date(Math.round((v - 25569) * 86400 * 1000))
-    return Number.isNaN(d.getTime()) ? null : d
+  if (v instanceof Date && !Number.isNaN(v.getTime())) {
+    return new Date(v.getFullYear(), v.getMonth(), v.getDate())
+  }
+  if (typeof v === 'number' && Number.isFinite(v)) {
+    // Sheets serial → local calendar date (avoid UTC day-shift)
+    const utc = new Date(Math.round((v - 25569) * 86400 * 1000))
+    if (Number.isNaN(utc.getTime())) return null
+    return new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate())
   }
   const s = String(v).trim()
+  if (!s || s.startsWith('#')) return null
+  // Month banners like "October 2026" are labels, not day rows
+  if (/^[A-Za-z]+\s+\d{4}$/.test(s)) return null
+
   const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/)
   if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]))
+
   const dmy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
   if (dmy) return new Date(Number(dmy[3]), Number(dmy[2]) - 1, Number(dmy[1]))
+
+  // "5 October 2026" / "05 Oct 2026" (Sheets formatted dates)
+  const dMonY = s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/)
+  if (dMonY) {
+    const mi = monthIndexFromName(dMonY[2])
+    if (mi >= 0) return new Date(Number(dMonY[3]), mi, Number(dMonY[1]))
+  }
+
+  // "October 5, 2026" / "Oct 5 2026"
+  const monDY = s.match(/^([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})$/)
+  if (monDY) {
+    const mi = monthIndexFromName(monDY[1])
+    if (mi >= 0) return new Date(Number(monDY[3]), mi, Number(monDY[2]))
+  }
+
   return null
 }
 
@@ -149,8 +197,9 @@ async function readSheetValues(auth, spreadsheetId, preferredName) {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: `'${sheetName}'`,
+    // SERIAL_NUMBER keeps dates as numbers (FORMATTED_STRING broke Home/prefill parsing)
     valueRenderOption: 'UNFORMATTED_VALUE',
-    dateTimeRenderOption: 'FORMATTED_STRING',
+    dateTimeRenderOption: 'SERIAL_NUMBER',
   })
   return res.data.values || []
 }
@@ -185,9 +234,9 @@ function monthTotalFormula(year, monthIndex0) {
   const startM = monthIndex0 + 1
   const endY = monthIndex0 === 11 ? year + 1 : year
   const endM = monthIndex0 === 11 ? 1 : monthIndex0 + 2
-  const criteria = `A:A,">="&DATE(${year},${startM},1),A:A,"<"&DATE(${endY},${endM},1)`
-  // Sum category cols C–J (not B:B) — formula lives in B, so B:B is circular → #ERROR!
-  return ['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'].map((col) => `SUMIFS(${col}:${col},${criteria})`).join('+')
+  // Sum Total Amount (col B) like personal Kharcha — manual B edits update the month header.
+  // Banner row has text in A, so date criteria exclude it (no circular #ERROR!).
+  return `SUMIFS(B:B,A:A,">="&DATE(${year},${startM},1),A:A,"<"&DATE(${endY},${endM},1))`
 }
 
 function isErrorCell(v) {
@@ -819,7 +868,88 @@ export async function applySheetChrome(auth, spreadsheetId) {
       requestBody: { requests },
     })
   }
+
+  // Ensure month banners sum Total Amount (col B) so manual sheet edits stay live
+  await repairBannerFormulas(auth, spreadsheetId)
   return { ok: true }
+}
+
+/**
+ * Rewrite every month-banner Total formula to SUMIFS(B:B, …)
+ * so editing Total Amount (or adding rows) updates the month header.
+ */
+async function repairBannerFormulas(auth, spreadsheetId) {
+  const sheets = sheetsApi(auth)
+  const sheetName = await resolveSheetName(auth, spreadsheetId, SHEET_EXPENSE)
+  const meta = await getSheetMeta(auth, spreadsheetId)
+  const sheetId = meta.find((s) => s.properties.title === sheetName)?.properties.sheetId
+  if (sheetId == null) return { updated: 0 }
+
+  const rows = await readSheetValues(auth, spreadsheetId, SHEET_EXPENSE)
+  const valueData = []
+  const formatReqs = []
+  let updated = 0
+
+  for (let i = 1; i < rows.length; i++) {
+    const label = rows[i][0]
+    if (!isBannerLabel(label)) continue
+    const parts = String(label).trim().split(/\s+/)
+    if (parts.length < 2) continue
+    const mi = monthIndexFromName(parts[0])
+    const year = Number(parts[parts.length - 1])
+    if (mi < 0 || !Number.isFinite(year)) continue
+
+    const row1 = i + 1
+    const formula = `=${monthTotalFormula(year, mi)}`
+    valueData.push({ range: `'${sheetName}'!B${row1}`, values: [[formula]] })
+    formatReqs.push({
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: i,
+          endRowIndex: i + 1,
+          startColumnIndex: 0,
+          endColumnIndex: 1,
+        },
+        cell: { userEnteredFormat: { numberFormat: { type: 'TEXT', pattern: '@' } } },
+        fields: 'userEnteredFormat.numberFormat',
+      },
+    })
+    formatReqs.push({
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: i,
+          endRowIndex: i + 1,
+          startColumnIndex: 1,
+          endColumnIndex: 2,
+        },
+        cell: {
+          userEnteredFormat: {
+            numberFormat: { type: 'CURRENCY', pattern: '₹#,##0.00' },
+            textFormat: { fontFamily: 'Arial', fontSize: 18, bold: true },
+            horizontalAlignment: 'CENTER',
+          },
+        },
+        fields: 'userEnteredFormat(numberFormat,textFormat,horizontalAlignment)',
+      },
+    })
+    updated++
+  }
+
+  if (valueData.length) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId,
+      requestBody: { valueInputOption: 'USER_ENTERED', data: valueData },
+    })
+  }
+  if (formatReqs.length) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests: formatReqs },
+    })
+  }
+  return { updated }
 }
 
 export async function createBlankKharchaSpreadsheet(auth, title = 'Expense Tracker') {
@@ -962,6 +1092,7 @@ function findLastRowForDate(rows, dateObj) {
   let count = 0
   let last = 0
   for (let i = 1; i < rows.length; i++) {
+    if (isBannerLabel(rows[i][0]) || isErrorCell(rows[i][0])) continue
     const d = coerceDate(rows[i][0])
     if (d && sameDay(d, dateObj)) {
       count++
@@ -1138,11 +1269,14 @@ export async function buildSummary(auth, spreadsheetId) {
 
   for (let i = 1; i < expenseRows.length; i++) {
     const r = expenseRows[i]
+    if (isBannerLabel(r[0]) || isErrorCell(r[0]) || isCorruptBannerRow(r)) continue
     const d = coerceDate(r[0])
     if (!d) continue
     const key = monthKey(d)
     byMonth[key] ||= { month: key, spend: 0, income: 0, credit: 0 }
-    const spend = num(r[1]) || EXPENSE_CATEGORIES.reduce((s, name, idx) => s + num(r[idx + 2]), 0)
+    // Prefer Total Amount (col B) so manual sheet edits win — same as personal Kharcha
+    const catSum = EXPENSE_CATEGORIES.reduce((s, name, idx) => s + num(r[idx + 2]), 0)
+    const spend = num(r[1]) || catSum
     byMonth[key].spend += spend
     EXPENSE_CATEGORIES.forEach((name, idx) => {
       const v = num(r[idx + 2])
@@ -1226,11 +1360,13 @@ export async function getMonthDetail(auth, spreadsheetId, month) {
 
   for (let i = 1; i < expenseRows.length; i++) {
     const r = expenseRows[i]
+    if (isBannerLabel(r[0]) || isErrorCell(r[0]) || isCorruptBannerRow(r)) continue
     const d = coerceDate(r[0])
     if (!d || monthKey(d) !== month) continue
     const iso = toISODate(d)
     ensure(iso)
-    const spend = num(r[1]) || EXPENSE_CATEGORIES.reduce((s, name, idx) => s + num(r[idx + 2]), 0)
+    const catSum = EXPENSE_CATEGORIES.reduce((s, name, idx) => s + num(r[idx + 2]), 0)
+    const spend = num(r[1]) || catSum
     dayMap[iso].spend += spend
     dayMap[iso].note = r[10] || dayMap[iso].note
     const dayCats = []

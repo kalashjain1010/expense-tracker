@@ -91,7 +91,22 @@ export function ageMs(entry) {
 }
 
 export function isFresh(entry, softTtl = SOFT_TTL_MS) {
-  return Boolean(entry) && ageMs(entry) < softTtl
+  if (!entry) return false
+  // Empty Home summaries go stale quickly so we refetch after sheet writes
+  const data = entry.data
+  if (
+    data &&
+    Array.isArray(data.byMonth) &&
+    data.byMonth.length === 0 &&
+    !(data.recent || []).length
+  ) {
+    return ageMs(entry) < 5_000
+  }
+  // Entry "not found" also refreshes sooner — sheet may have gained a row
+  if (data && data.found === false && data.type) {
+    return ageMs(entry) < 15_000
+  }
+  return ageMs(entry) < softTtl
 }
 
 export function isUsable(entry, hardTtl = HARD_TTL_MS) {

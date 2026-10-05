@@ -17,31 +17,30 @@ export default function IncomePage() {
 
   const total = useMemo(() => (Number(you) || 0) + (Number(partner) || 0), [you, partner])
   const matched = Boolean(existing && (!existing.date || existing.date === date))
-  const editing = Boolean(matched && existing.found && !loading)
+  const editing = Boolean(matched && existing.found && !(loading && !matched))
   const loadingEntry = loading && !matched
   const busy = saving || loadingEntry
 
   useEffect(() => {
-    setYou('')
-    setPartner('')
-    setSource('')
     setStatus(null)
-  }, [date])
-
-  useEffect(() => {
-    if (loading) return
-    if (!existing) return
-    if (existing.date && existing.date !== date) return
+    if (!existing || (existing.date && existing.date !== date)) {
+      if (!loading) {
+        setYou('')
+        setPartner('')
+        setSource('')
+      }
+      return
+    }
     if (existing.found) {
       setYou(entryStr(existing.you ?? existing.kalash))
       setPartner(entryStr(existing.partner ?? existing.mummy))
       setSource(existing.source || '')
-    } else {
+    } else if (!loading && !refreshing) {
       setYou('')
       setPartner('')
       setSource('')
     }
-  }, [existing, date, loading])
+  }, [existing, date, loading, refreshing])
 
   useEffect(() => {
     if (loadError) setStatus({ type: 'error', message: loadError })
