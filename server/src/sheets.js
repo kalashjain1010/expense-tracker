@@ -161,27 +161,28 @@ function monthTotalFormula(year, monthIndex0) {
   const endY = monthIndex0 === 11 ? year + 1 : year
   const endM = monthIndex0 === 11 ? 1 : monthIndex0 + 2
   const criteria = `A:A,">="&DATE(${year},${startM},1),A:A,"<"&DATE(${endY},${endM},1)`
-  // Sum category cols C–J (not B:B) — formula lives in B, so B:B would be circular → #ERROR!
-  // Sheets API formulaValue must NOT include leading '='
+  // Sum category cols C–J (not B:B) — formula lives in B, so B:B is circular → #ERROR!
   return ['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'].map((col) => `SUMIFS(${col}:${col},${criteria})`).join('+')
 }
 
-function monthBannerLabelFormula(year, monthIndex0) {
-  // TEXT formula keeps "October 2026" as text (plain stringValue often becomes a date)
-  return `TEXT(DATE(${year},${monthIndex0 + 1},1),"MMMM YYYY")`
+function isErrorCell(v) {
+  return typeof v === 'string' && String(v).trim().startsWith('#')
 }
 
 function isBannerLabel(v) {
   if (v == null || v === '') return false
   if (typeof v === 'number') return false
   if (v instanceof Date) return false
+  if (isErrorCell(v)) return false
   const s = String(v).trim()
   if (!s || /^\d/.test(s)) return false
-  return /[a-zA-Z]/.test(s)
+  // Real banners look like "October 2026"
+  return /^[A-Za-z]+\s+\d{4}$/.test(s) || (/[a-zA-Z]/.test(s) && /\d{4}/.test(s) && !/^\d/.test(s))
 }
 
 /** Day-1 date + no category amounts → likely a banner that Sheets turned into a date. */
 function isCorruptBannerRow(row) {
+  if (isErrorCell(row?.[0]) || isErrorCell(row?.[1])) return true
   const d = coerceDate(row?.[0])
   if (!d || d.getDate() !== 1) return false
   const note = row[10]
@@ -189,10 +190,8 @@ function isCorruptBannerRow(row) {
   for (let c = 2; c <= 9; c++) {
     if (num(row[c]) !== 0) return false
   }
-  // #REF! / empty / broken total in B also counts
   const b = row[1]
   if (b === '#REF!' || b === '' || b == null || String(b).startsWith('#')) return true
-  // Pure day-1 with zero total and no cats — treat as corrupt banner
   return num(b) === 0
 }
 
@@ -228,20 +227,36 @@ async function getSheetMeta(auth, spreadsheetId) {
 async function formatDataRow(auth, spreadsheetId, sheetId, row1Based, currencyEndCol) {
   const sheets = sheetsApi(auth)
   const r = row1Based - 1
+  const black = { red: 0, green: 0, blue: 0 }
+  const white = { red: 1, green: 1, blue: 1 }
+  const baseText = { fontFamily: 'Arial', fontSize: 10, bold: false, foregroundColor: black }
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
       requests: [
         {
           repeatCell: {
+            range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 11 },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: white,
+                textFormat: baseText,
+              },
+            },
+            fields: 'userEnteredFormat(backgroundColor,textFormat)',
+          },
+        },
+        {
+          repeatCell: {
             range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 1 },
             cell: {
               userEnteredFormat: {
                 numberFormat: { type: 'DATE', pattern: 'd mmmm yyyy' },
-                textFormat: { fontFamily: 'Arial', fontSize: 10, bold: false },
+                textFormat: baseText,
+                backgroundColor: white,
               },
             },
-            fields: 'userEnteredFormat(numberFormat,textFormat)',
+            fields: 'userEnteredFormat(numberFormat,textFormat,backgroundColor)',
           },
         },
         {
@@ -256,10 +271,11 @@ async function formatDataRow(auth, spreadsheetId, sheetId, row1Based, currencyEn
             cell: {
               userEnteredFormat: {
                 numberFormat: { type: 'CURRENCY', pattern: '₹#,##0.00' },
-                textFormat: { fontFamily: 'Arial', fontSize: 10, bold: false },
+                textFormat: baseText,
+                backgroundColor: white,
               },
             },
-            fields: 'userEnteredFormat(numberFormat,textFormat)',
+            fields: 'userEnteredFormat(numberFormat,textFormat,backgroundColor)',
           },
         },
       ],
@@ -267,13 +283,34 @@ async function formatDataRow(auth, spreadsheetId, sheetId, row1Based, currencyEn
   })
 }
 
-/** Write month banner as TEXT formula label + category SUMIFS (never USER_ENTERED). */
-async function writeBannerRow(auth, spreadsheetId, sheetId, row1Based, year, monthIndex0) {
+/**
+ * Write month banner like personal Kharcha:
+ * A = plain text "October 2026" (RAW — never auto-dated)
+ * B = live SUMIFS across category columns
+ */
+async function writeBannerRow(auth, spreadsheetId, sheetId, row1Based, year, monthIndex0, sheetName) {
   const sheets = sheetsApi(auth)
-  const formula = monthTotalFormula(year, monthIndex0)
-  const labelFormula = monthBannerLabelFormula(year, monthIndex0)
+  const name = sheetName || (await resolveSheetName(auth, spreadsheetId, SHEET_EXPENSE))
+  const label = monthLabel(new Date(year, monthIndex0, 1))
+  const formula = `=${monthTotalFormula(year, monthIndex0)}`
   const r = row1Based - 1
-  const empty = { userEnteredValue: { stringValue: '' } }
+  const black = { red: 0, green: 0, blue: 0 }
+  const white = { red: 1, green: 1, blue: 1 }
+
+  // RAW keeps "October 2026" as text (USER_ENTERED turns it into a date)
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${name}'!A${row1Based}`,
+    valueInputOption: 'RAW',
+    requestBody: { values: [[label]] },
+  })
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${name}'!B${row1Based}:K${row1Based}`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: [[formula, '', '', '', '', '', '', '', '', '']] },
+  })
+
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
@@ -286,44 +323,37 @@ async function writeBannerRow(auth, spreadsheetId, sheetId, row1Based, year, mon
           },
         },
         {
-          updateCells: {
-            start: { sheetId, rowIndex: r, columnIndex: 0 },
-            rows: [
-              {
-                values: [
-                  {
-                    userEnteredValue: { formulaValue: labelFormula },
-                    userEnteredFormat: {
-                      numberFormat: { type: 'TEXT' },
-                      textFormat: {
-                        fontFamily: 'Arial',
-                        fontSize: 18,
-                        bold: true,
-                        foregroundColor: { red: 0, green: 0, blue: 0 },
-                      },
-                      verticalAlignment: 'MIDDLE',
-                      horizontalAlignment: 'LEFT',
-                    },
-                  },
-                  {
-                    userEnteredValue: { formulaValue: formula },
-                    userEnteredFormat: {
-                      numberFormat: { type: 'CURRENCY', pattern: '₹#,##0.00' },
-                      textFormat: {
-                        fontFamily: 'Arial',
-                        fontSize: 18,
-                        bold: true,
-                        foregroundColor: { red: 0, green: 0, blue: 0 },
-                      },
-                      horizontalAlignment: 'LEFT',
-                      verticalAlignment: 'MIDDLE',
-                    },
-                  },
-                  ...Array(9).fill(empty),
-                ],
+          repeatCell: {
+            range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 11 },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: white,
+                textFormat: {
+                  fontFamily: 'Arial',
+                  fontSize: 18,
+                  bold: true,
+                  foregroundColor: black,
+                },
+                verticalAlignment: 'MIDDLE',
+                horizontalAlignment: 'LEFT',
               },
-            ],
-            fields: 'userEnteredValue,userEnteredFormat',
+            },
+            fields:
+              'userEnteredFormat(backgroundColor,textFormat,verticalAlignment,horizontalAlignment)',
+          },
+        },
+        {
+          repeatCell: {
+            range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 1 },
+            cell: { userEnteredFormat: { numberFormat: { type: 'TEXT', pattern: '@' } } },
+            fields: 'userEnteredFormat.numberFormat',
+          },
+        },
+        {
+          repeatCell: {
+            range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 1, endColumnIndex: 2 },
+            cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '₹#,##0.00' } } },
+            fields: 'userEnteredFormat.numberFormat',
           },
         },
       ],
@@ -346,6 +376,7 @@ async function rebuildSpendLayout(auth, spreadsheetId) {
   const entries = []
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i]
+    if (isErrorCell(row[0]) || isErrorCell(row[1])) continue
     if (isBannerLabel(row[0])) continue
     if (isCorruptBannerRow(row)) continue
     const d = coerceDate(row[0])
@@ -368,7 +399,7 @@ async function rebuildSpendLayout(auth, spreadsheetId) {
   }
   entries.sort((a, b) => a.date.getTime() - b.date.getTime())
 
-  // Clear body (keep header)
+  // Clear body (keep header) — wipe green/white-on-green leftover formats
   const clearTo = Math.max(rows.length + 5, 40)
   await sheets.spreadsheets.values.clear({
     spreadsheetId,
@@ -389,7 +420,12 @@ async function rebuildSpendLayout(auth, spreadsheetId) {
             },
             cell: {
               userEnteredFormat: {
-                textFormat: { fontFamily: 'Arial', fontSize: 10, bold: false },
+                textFormat: {
+                  fontFamily: 'Arial',
+                  fontSize: 10,
+                  bold: false,
+                  foregroundColor: { red: 0, green: 0, blue: 0 },
+                },
                 backgroundColor: { red: 1, green: 1, blue: 1 },
               },
             },
@@ -401,10 +437,9 @@ async function rebuildSpendLayout(auth, spreadsheetId) {
   })
 
   if (!entries.length) {
-    // Empty sheet — still seed this month's banner after 2 blanks
+    // Empty sheet — seed this month's banner after 2 blanks (rows 2–3 empty, banner on 4)
     const now = new Date()
-    await writeBannerRow(auth, spreadsheetId, sheetId, 4, now.getFullYear(), now.getMonth())
-    // two blanks are just empty rows 2–3
+    await writeBannerRow(auth, spreadsheetId, sheetId, 4, now.getFullYear(), now.getMonth(), sheetName)
     return { ok: true, rows: 0, months: 1 }
   }
 
@@ -420,7 +455,7 @@ async function rebuildSpendLayout(auth, spreadsheetId) {
         year: ent.date.getFullYear(),
         month: ent.date.getMonth(),
       })
-      out.push(Array(11).fill('')) // placeholder; written via updateCells
+      out.push(Array(11).fill('')) // placeholder; written via writeBannerRow
       prevKey = ent.key
     }
     out.push([
@@ -441,10 +476,13 @@ async function rebuildSpendLayout(auth, spreadsheetId) {
   // Write real banners (text + formula) and format day rows
   for (const b of bannerMeta) {
     const sheetRow = 2 + b.outIndex
-    await writeBannerRow(auth, spreadsheetId, sheetId, sheetRow, b.year, b.month)
+    await writeBannerRow(auth, spreadsheetId, sheetId, sheetRow, b.year, b.month, sheetName)
   }
 
   const formatReqs = []
+  const black = { red: 0, green: 0, blue: 0 }
+  const white = { red: 1, green: 1, blue: 1 }
+  const dayText = { fontFamily: 'Arial', fontSize: 10, bold: false, foregroundColor: black }
   for (let i = 0; i < out.length; i++) {
     const a = out[i][0]
     if (typeof a === 'string' && a.startsWith('=DATE(')) {
@@ -452,14 +490,27 @@ async function rebuildSpendLayout(auth, spreadsheetId) {
       formatReqs.push(
         {
           repeatCell: {
+            range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 11 },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: white,
+                textFormat: dayText,
+              },
+            },
+            fields: 'userEnteredFormat(backgroundColor,textFormat)',
+          },
+        },
+        {
+          repeatCell: {
             range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 1 },
             cell: {
               userEnteredFormat: {
                 numberFormat: { type: 'DATE', pattern: 'd mmmm yyyy' },
-                textFormat: { fontFamily: 'Arial', fontSize: 10, bold: false },
+                textFormat: dayText,
+                backgroundColor: white,
               },
             },
-            fields: 'userEnteredFormat(numberFormat,textFormat)',
+            fields: 'userEnteredFormat(numberFormat,textFormat,backgroundColor)',
           },
         },
         {
@@ -468,10 +519,11 @@ async function rebuildSpendLayout(auth, spreadsheetId) {
             cell: {
               userEnteredFormat: {
                 numberFormat: { type: 'CURRENCY', pattern: '₹#,##0.00' },
-                textFormat: { fontFamily: 'Arial', fontSize: 10, bold: false },
+                textFormat: dayText,
+                backgroundColor: white,
               },
             },
-            fields: 'userEnteredFormat(numberFormat,textFormat)',
+            fields: 'userEnteredFormat(numberFormat,textFormat,backgroundColor)',
           },
         },
       )
@@ -499,7 +551,7 @@ async function ensureMonthBanner(auth, spreadsheetId, dateObj) {
   if (existing) {
     const meta = await getSheetMeta(auth, spreadsheetId)
     const sheetId = meta.find((s) => s.properties.title === sheetName)?.properties.sheetId
-    if (sheetId != null) await writeBannerRow(auth, spreadsheetId, sheetId, existing, year, month)
+    if (sheetId != null) await writeBannerRow(auth, spreadsheetId, sheetId, existing, year, month, sheetName)
     return existing
   }
 
@@ -514,7 +566,7 @@ async function ensureMonthBanner(auth, spreadsheetId, dateObj) {
     requestBody: { values: [Array(11).fill(''), Array(11).fill('')] },
   })
   const bannerRow = startRow + 2
-  if (sheetId != null) await writeBannerRow(auth, spreadsheetId, sheetId, bannerRow, year, month)
+  if (sheetId != null) await writeBannerRow(auth, spreadsheetId, sheetId, bannerRow, year, month, sheetName)
   return bannerRow
 }
 
@@ -846,6 +898,7 @@ export async function addExpense(auth, spreadsheetId, payload) {
     ...EXPENSE_CATEGORIES.map((k) => blankOrNum(cats[k])),
     payload.note || '',
   ]
+  // Re-read after banner write so we append after the last real row (never into the blank gap)
   const rows = await readSheetValues(auth, spreadsheetId, SHEET_EXPENSE)
   const found = findLastRowForDate(rows, dateObj)
   let row
@@ -853,7 +906,8 @@ export async function addExpense(auth, spreadsheetId, payload) {
     await writeRow(auth, spreadsheetId, SHEET_EXPENSE, found.row, values)
     row = found.row
   } else {
-    row = await appendRow(auth, spreadsheetId, SHEET_EXPENSE, values)
+    row = Math.max(rows.length + 1, 2)
+    await writeRow(auth, spreadsheetId, SHEET_EXPENSE, row, values)
   }
 
   const sheetName = await resolveSheetName(auth, spreadsheetId, SHEET_EXPENSE)
