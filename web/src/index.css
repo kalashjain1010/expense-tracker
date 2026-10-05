@@ -11,6 +11,8 @@
   --line: rgba(18, 28, 23, 0.07);
   --shadow: 0 1px 2px rgba(18, 28, 23, 0.04), 0 8px 24px rgba(18, 28, 23, 0.05);
   --radius: 14px;
+  --radius-btn: 12px;
+  --control-h: 36px;
   --nav-h: 64px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   font-family: 'Manrope', system-ui, sans-serif;
@@ -198,9 +200,9 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  height: 36px;
+  height: var(--control-h);
   padding: 0 0.7rem;
-  border-radius: 10px;
+  border-radius: var(--radius-btn);
   background: var(--green-soft);
   color: var(--green-deep);
   font-size: 0.78rem;
@@ -325,31 +327,37 @@ textarea {
 .chart-open-month {
   margin-top: 0.5rem;
   width: 100%;
+  min-height: var(--control-h);
   padding: 0.4rem 0.65rem;
   font-size: 0.76rem;
-  border-radius: 10px;
+  border-radius: var(--radius-btn);
   box-shadow: none;
 }
 
 .month-detail-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 0.45rem;
   margin: 0.1rem 0 0.7rem;
 }
 
 .month-detail-actions .btn {
   flex: 1;
   min-width: 0;
-  padding: 0.42rem 0.6rem;
-  font-size: 0.76rem;
+  min-height: 40px;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.78rem;
   font-weight: 700;
   text-align: center;
-  border-radius: 10px;
+  border-radius: var(--radius-btn);
   box-shadow: none;
+  margin: 0;
 }
 
-.month-detail-actions .btn.primary {
+.month-detail-actions .btn.primary,
+.month-detail-actions .btn.ghost {
+  margin: 0;
   box-shadow: none;
 }
 
@@ -396,18 +404,23 @@ textarea {
 
 .confirm-actions {
   display: flex;
+  align-items: stretch;
   gap: 0.45rem;
 }
 
 .confirm-actions .btn {
   flex: 1;
+  min-height: 44px;
   padding: 0.55rem 0.75rem;
   font-size: 0.82rem;
-  border-radius: 10px;
+  border-radius: var(--radius-btn);
   box-shadow: none;
+  margin: 0;
 }
 
-.confirm-actions .btn.primary {
+.confirm-actions .btn.primary,
+.confirm-actions .btn.ghost {
+  margin: 0;
   box-shadow: none;
 }
 
@@ -511,8 +524,16 @@ textarea {
 .welcome-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: stretch;
   gap: 0.5rem;
   margin-top: 0.9rem;
+}
+
+.welcome-actions .btn {
+  margin: 0;
+  min-height: 40px;
+  flex: 1;
+  border-radius: var(--radius-btn);
 }
 
 .welcome-actions .btn.primary {
@@ -525,16 +546,17 @@ textarea {
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.25);
+  margin: 0;
 }
 
 .lock-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: var(--control-h);
+  height: var(--control-h);
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-btn);
   background: var(--green-soft);
   color: var(--green-deep);
   cursor: pointer;
@@ -799,14 +821,18 @@ textarea {
 }
 
 .refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
   background: rgba(255, 255, 255, 0.14);
   color: rgba(242, 250, 246, 0.92);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  padding: 0.28rem 0.55rem;
-  border-radius: 999px;
+  height: var(--control-h);
+  padding: 0 0.75rem;
+  border-radius: var(--radius-btn);
   cursor: pointer;
   transition: background 0.2s var(--ease), transform 0.2s var(--ease);
 }
@@ -1251,12 +1277,15 @@ textarea {
 }
 
 .back-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
   background: var(--green-soft);
   color: var(--green-deep);
-  width: 2rem;
-  height: 2rem;
-  border-radius: 999px;
+  width: var(--control-h);
+  height: var(--control-h);
+  border-radius: var(--radius-btn);
   font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
@@ -1315,7 +1344,7 @@ textarea {
   gap: 0.35rem;
   font-size: 0.72rem;
   padding: 0.28rem 0.55rem;
-  border-radius: 999px;
+  border-radius: var(--radius-btn);
   background: #eef3ef;
   color: var(--muted);
   pointer-events: none;
@@ -1763,12 +1792,20 @@ textarea {
 }
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   border: 0;
-  border-radius: 12px;
-  padding: 0.85rem 1rem;
+  border-radius: var(--radius-btn);
+  min-height: 48px;
+  padding: 0.75rem 1rem;
   font-weight: 700;
+  line-height: 1.2;
   cursor: pointer;
-  transition: transform 0.15s var(--ease), background 0.15s ease;
+  text-align: center;
+  margin: 0;
+  transition: transform 0.15s var(--ease), background 0.15s ease, border-color 0.15s ease;
 }
 
 .btn:active:not(:disabled) {
@@ -1794,6 +1831,13 @@ textarea {
   background: var(--surface);
   border: 1px solid var(--line);
   color: var(--ink);
+  margin: 0;
+  box-shadow: none;
+}
+
+/* Stacked ghost under a block (error / empty), not side-by-side pairs */
+.empty-state .btn.ghost,
+.error-text + .btn.ghost {
   margin-top: 0.75rem;
 }
 
