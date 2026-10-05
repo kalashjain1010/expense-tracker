@@ -45,20 +45,27 @@ Note: ${note || ''}
 Reply with ONLY the category key, nothing else.`
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${encodeURIComponent(key)}`
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0, maxOutputTokens: 16 },
-      }),
-    })
-    if (!res.ok) return fallback
-    const json = await res.json()
-    const text = json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
-    const hit = EXPENSE_CATEGORIES.find((c) => c.toLowerCase() === text.toLowerCase())
-    if (hit) return { category: hit, confidence: 0.9, source: 'gemini' }
+    const models = ['gemini-flash-latest', 'gemini-3.8-flash']
+    for (const model of models) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0, maxOutputTokens: 16 },
+        }),
+      })
+      if (res.status === 503) continue
+      if (!res.ok) continue
+      const json = await res.json()
+      const text = json?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || ''
+      const cleaned = text.replace(/[`"'*_]/g, '').split(/\s|\n/)[0] || ''
+      const hit = EXPENSE_CATEGORIES.find(
+        (c) => c.toLowerCase() === cleaned.toLowerCase() || c.toLowerCase() === text.toLowerCase(),
+      )
+      if (hit) return { category: hit, confidence: 0.9, source: 'gemini' }
+    }
     return fallback
   } catch {
     return fallback
