@@ -330,7 +330,7 @@ export default function Dashboard() {
                 key={key}
                 type="button"
                 role="listitem"
-                className={`month-chip ${isThis ? 'is-current' : ''} ${defaultPick === key ? 'is-selected' : ''}`}
+                className={`month-chip ${isThis ? 'is-current' : ''}`}
                 onClick={() => {
                   setPickMonth(key)
                   setDetailMonth(key)
