@@ -1,5 +1,8 @@
 # Deploy Expense Tracker — free forever (Vercel + Turso)
 
+**Live app:** [https://trackexpense.vercel.app](https://trackexpense.vercel.app)  
+(Also: [https://track-daily-expense.vercel.app](https://track-daily-expense.vercel.app))
+
 One Vercel project serves the **web UI + API** on the same domain (cookies just work).  
 Sessions/user pointers live in **Turso** (free SQLite-compatible cloud DB). Money stays in each user’s Google Sheet.
 
@@ -23,41 +26,50 @@ turso db tokens create expense-tracker
 
 ## 2. Deploy on Vercel (one project)
 
+Already live as project **trackdailyexpense**:
+- Primary: https://trackexpense.vercel.app  
+- Alias: https://track-daily-expense.vercel.app  
+
+If recreating from scratch:
+
 1. [vercel.com](https://vercel.com) → **Add New Project** → import `expense-tracker`  
 2. **Root Directory:** leave as repo root (`.`) — do **not** set `web`  
 3. Framework: Other / Vite (build comes from `vercel.json`)  
 4. **Environment variables** (Production):
 
 ```
-APP_ORIGIN=https://YOUR-PROJECT.vercel.app
+APP_ORIGIN=https://trackexpense.vercel.app
 SESSION_SECRET=long-random-string
 GOOGLE_CLIENT_ID=…
 GOOGLE_CLIENT_SECRET=…
-GOOGLE_REDIRECT_URI=https://YOUR-PROJECT.vercel.app/auth/google/callback
+GOOGLE_REDIRECT_URI=https://trackexpense.vercel.app/auth/google/callback
 TURSO_DATABASE_URL=libsql://….turso.io
 TURSO_AUTH_TOKEN=…
-VITE_API_BASE=
 ```
 
-Leave `VITE_API_BASE` **empty** so the browser calls the same domain (`/api`, `/auth`).
+Leave `VITE_API_BASE` unset/empty so the browser calls the same domain (`/api`, `/auth`).
 
-5. Deploy → open `https://YOUR-PROJECT.vercel.app/health` → `{"ok":true,"oauth":true}`
+5. Deploy → open `https://trackexpense.vercel.app/health` → `{"ok":true,"oauth":true}`
 
-## 3. Google OAuth
+## 3. Google OAuth (do this so anyone can sign in)
 
 Cloud Console → Credentials → OAuth Web client:
 
 **Authorized JavaScript origins**
 ```
-https://YOUR-PROJECT.vercel.app
+https://trackexpense.vercel.app
+https://track-daily-expense.vercel.app
 ```
 
 **Authorized redirect URIs**
 ```
-https://YOUR-PROJECT.vercel.app/auth/google/callback
+https://trackexpense.vercel.app/auth/google/callback
+https://track-daily-expense.vercel.app/auth/google/callback
 ```
 
 (Keep local `http://127.0.0.1:5173` / `http://127.0.0.1:8787/...` for development.)
+
+Then **OAuth consent screen → Publish app** (and add a privacy policy URL) so users outside your test list can sign in. Sheets scopes may show “unverified” until Google verifies.
 
 ## 4. Local development (unchanged)
 
