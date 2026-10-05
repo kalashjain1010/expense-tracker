@@ -47,6 +47,31 @@ const TAB_COLORS = {
   [SHEET_CC]: { red: 0.55, green: 0.4, blue: 0.2 },
 }
 
+/** Bump when column widths / default alignment change — applied once per user. */
+export const SHEET_LAYOUT_VERSION = 3
+
+const SHEET_LAYOUT = {
+  [SHEET_EXPENSE]: {
+    headers: EXPENSE_HEADERS,
+    // Date, Total Amount wider; Note very wide
+    widths: [200, 150, 95, 105, 115, 95, 95, 95, 115, 95, 720],
+    cols: 11,
+    noteCol: 10, // 0-based; left-aligned; all others centered
+  },
+  [SHEET_INCOME]: {
+    headers: INCOME_HEADERS,
+    widths: [200, 120, 120, 120, 320],
+    cols: 5,
+    noteCol: 4,
+  },
+  [SHEET_CC]: {
+    headers: CC_HEADERS,
+    widths: [200, 150, 720],
+    cols: 3,
+    noteCol: 2,
+  },
+}
+
 function sheetsApi(auth) {
   return google.sheets({ version: 'v4', auth })
 }
@@ -224,26 +249,29 @@ async function getSheetMeta(auth, spreadsheetId) {
   return meta.data.sheets || []
 }
 
-async function formatDataRow(auth, spreadsheetId, sheetId, row1Based, currencyEndCol) {
+async function formatDataRow(auth, spreadsheetId, sheetId, row1Based, currencyEndCol, noteCol = 10) {
   const sheets = sheetsApi(auth)
   const r = row1Based - 1
   const black = { red: 0, green: 0, blue: 0 }
   const white = { red: 1, green: 1, blue: 1 }
   const baseText = { fontFamily: 'Arial', fontSize: 10, bold: false, foregroundColor: black }
+  const cols = Math.max(noteCol + 1, currencyEndCol, 11)
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
       requests: [
         {
           repeatCell: {
-            range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 11 },
+            range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: cols },
             cell: {
               userEnteredFormat: {
                 backgroundColor: white,
                 textFormat: baseText,
+                horizontalAlignment: 'CENTER',
+                verticalAlignment: 'MIDDLE',
               },
             },
-            fields: 'userEnteredFormat(backgroundColor,textFormat)',
+            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
           },
         },
         {
@@ -254,9 +282,11 @@ async function formatDataRow(auth, spreadsheetId, sheetId, row1Based, currencyEn
                 numberFormat: { type: 'DATE', pattern: 'd mmmm yyyy' },
                 textFormat: baseText,
                 backgroundColor: white,
+                horizontalAlignment: 'CENTER',
+                verticalAlignment: 'MIDDLE',
               },
             },
-            fields: 'userEnteredFormat(numberFormat,textFormat,backgroundColor)',
+            fields: 'userEnteredFormat(numberFormat,textFormat,backgroundColor,horizontalAlignment,verticalAlignment)',
           },
         },
         {
@@ -273,9 +303,31 @@ async function formatDataRow(auth, spreadsheetId, sheetId, row1Based, currencyEn
                 numberFormat: { type: 'CURRENCY', pattern: '₹#,##0.00' },
                 textFormat: baseText,
                 backgroundColor: white,
+                horizontalAlignment: 'CENTER',
+                verticalAlignment: 'MIDDLE',
               },
             },
-            fields: 'userEnteredFormat(numberFormat,textFormat,backgroundColor)',
+            fields: 'userEnteredFormat(numberFormat,textFormat,backgroundColor,horizontalAlignment,verticalAlignment)',
+          },
+        },
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: r,
+              endRowIndex: r + 1,
+              startColumnIndex: noteCol,
+              endColumnIndex: noteCol + 1,
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: white,
+                textFormat: baseText,
+                horizontalAlignment: 'LEFT',
+                verticalAlignment: 'MIDDLE',
+              },
+            },
+            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
           },
         },
       ],
@@ -335,7 +387,7 @@ async function writeBannerRow(auth, spreadsheetId, sheetId, row1Based, year, mon
                   foregroundColor: black,
                 },
                 verticalAlignment: 'MIDDLE',
-                horizontalAlignment: 'LEFT',
+                horizontalAlignment: 'CENTER',
               },
             },
             fields:
@@ -345,15 +397,25 @@ async function writeBannerRow(auth, spreadsheetId, sheetId, row1Based, year, mon
         {
           repeatCell: {
             range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 1 },
-            cell: { userEnteredFormat: { numberFormat: { type: 'TEXT', pattern: '@' } } },
-            fields: 'userEnteredFormat.numberFormat',
+            cell: {
+              userEnteredFormat: {
+                numberFormat: { type: 'TEXT', pattern: '@' },
+                horizontalAlignment: 'CENTER',
+              },
+            },
+            fields: 'userEnteredFormat(numberFormat,horizontalAlignment)',
           },
         },
         {
           repeatCell: {
             range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 1, endColumnIndex: 2 },
-            cell: { userEnteredFormat: { numberFormat: { type: 'CURRENCY', pattern: '₹#,##0.00' } } },
-            fields: 'userEnteredFormat.numberFormat',
+            cell: {
+              userEnteredFormat: {
+                numberFormat: { type: 'CURRENCY', pattern: '₹#,##0.00' },
+                horizontalAlignment: 'CENTER',
+              },
+            },
+            fields: 'userEnteredFormat(numberFormat,horizontalAlignment)',
           },
         },
       ],
@@ -495,9 +557,11 @@ async function rebuildSpendLayout(auth, spreadsheetId) {
               userEnteredFormat: {
                 backgroundColor: white,
                 textFormat: dayText,
+                horizontalAlignment: 'CENTER',
+                verticalAlignment: 'MIDDLE',
               },
             },
-            fields: 'userEnteredFormat(backgroundColor,textFormat)',
+            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
           },
         },
         {
@@ -508,9 +572,11 @@ async function rebuildSpendLayout(auth, spreadsheetId) {
                 numberFormat: { type: 'DATE', pattern: 'd mmmm yyyy' },
                 textFormat: dayText,
                 backgroundColor: white,
+                horizontalAlignment: 'CENTER',
+                verticalAlignment: 'MIDDLE',
               },
             },
-            fields: 'userEnteredFormat(numberFormat,textFormat,backgroundColor)',
+            fields: 'userEnteredFormat(numberFormat,textFormat,backgroundColor,horizontalAlignment,verticalAlignment)',
           },
         },
         {
@@ -521,9 +587,25 @@ async function rebuildSpendLayout(auth, spreadsheetId) {
                 numberFormat: { type: 'CURRENCY', pattern: '₹#,##0.00' },
                 textFormat: dayText,
                 backgroundColor: white,
+                horizontalAlignment: 'CENTER',
+                verticalAlignment: 'MIDDLE',
               },
             },
-            fields: 'userEnteredFormat(numberFormat,textFormat,backgroundColor)',
+            fields: 'userEnteredFormat(numberFormat,textFormat,backgroundColor,horizontalAlignment,verticalAlignment)',
+          },
+        },
+        {
+          repeatCell: {
+            range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 10, endColumnIndex: 11 },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: white,
+                textFormat: dayText,
+                horizontalAlignment: 'LEFT',
+                verticalAlignment: 'MIDDLE',
+              },
+            },
+            fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
           },
         },
       )
@@ -572,57 +654,45 @@ async function ensureMonthBanner(auth, spreadsheetId, dateObj) {
 
 /** Apply header styling to all tabs, then rebuild Spend layout cleanly. */
 export async function styleSpreadsheet(auth, spreadsheetId) {
+  await applySheetChrome(auth, spreadsheetId)
+  await rebuildSpendLayout(auth, spreadsheetId)
+  return { ok: true }
+}
+
+/**
+ * Light layout pass: column widths + center/left alignment.
+ * One metadata read + one batchUpdate — safe to run without blowing quota.
+ */
+export async function applySheetChrome(auth, spreadsheetId) {
   const sheets = sheetsApi(auth)
   const metaSheets = await getSheetMeta(auth, spreadsheetId)
   const byTitle = Object.fromEntries(metaSheets.map((s) => [s.properties.title, s.properties.sheetId]))
 
-  const specs = [
-    {
-      preferred: SHEET_EXPENSE,
-      headers: EXPENSE_HEADERS,
-      // Date a bit wider; Note as wide as practical for long notes
-      widths: [155, 120, 90, 100, 110, 90, 90, 90, 110, 90, 520],
-      cols: 11,
-    },
-    {
-      preferred: SHEET_INCOME,
-      headers: INCOME_HEADERS,
-      widths: [155, 110, 110, 110, 280],
-      cols: 5,
-    },
-    {
-      preferred: SHEET_CC,
-      headers: CC_HEADERS,
-      widths: [155, 120, 520],
-      cols: 3,
-    },
-  ]
-
   const requests = []
   const valueData = []
 
-  for (const spec of specs) {
+  for (const preferred of [SHEET_EXPENSE, SHEET_INCOME, SHEET_CC]) {
+    const spec = SHEET_LAYOUT[preferred]
     const title =
-      (SHEET_ALIASES[spec.preferred] || [spec.preferred]).find((t) => byTitle[t] != null) ||
-      spec.preferred
+      (SHEET_ALIASES[preferred] || [preferred]).find((t) => byTitle[t] != null) || preferred
     const sheetId = byTitle[title]
     if (sheetId == null) continue
 
-    // Headers via RAW so nothing is auto-parsed
     valueData.push({ range: `'${title}'!A1`, values: [spec.headers] })
 
     requests.push({
       updateSheetProperties: {
         properties: {
           sheetId,
-          title: spec.preferred,
-          tabColor: TAB_COLORS[spec.preferred],
+          title: preferred,
+          tabColor: TAB_COLORS[preferred],
           gridProperties: { frozenRowCount: 1 },
         },
         fields: 'title,tabColor,gridProperties.frozenRowCount',
       },
     })
 
+    // Header: center all except note/source column (left)
     requests.push({
       repeatCell: {
         range: {
@@ -631,6 +701,33 @@ export async function styleSpreadsheet(auth, spreadsheetId) {
           endRowIndex: 1,
           startColumnIndex: 0,
           endColumnIndex: spec.cols,
+        },
+        cell: {
+          userEnteredFormat: {
+            backgroundColor: HEADER_BG,
+            textFormat: {
+              foregroundColor: HEADER_FG,
+              bold: true,
+              fontFamily: 'Arial',
+              fontSize: 10,
+            },
+            horizontalAlignment: 'CENTER',
+            verticalAlignment: 'MIDDLE',
+            numberFormat: { type: 'TEXT' },
+          },
+        },
+        fields:
+          'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment,numberFormat)',
+      },
+    })
+    requests.push({
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: 0,
+          endRowIndex: 1,
+          startColumnIndex: spec.noteCol,
+          endColumnIndex: spec.noteCol + 1,
         },
         cell: {
           userEnteredFormat: {
@@ -668,6 +765,46 @@ export async function styleSpreadsheet(auth, spreadsheetId) {
         },
       })
     })
+
+    // Body default alignment: center A..(note-1), left note (rows 2–500)
+    if (spec.noteCol > 0) {
+      requests.push({
+        repeatCell: {
+          range: {
+            sheetId,
+            startRowIndex: 1,
+            endRowIndex: 500,
+            startColumnIndex: 0,
+            endColumnIndex: spec.noteCol,
+          },
+          cell: {
+            userEnteredFormat: {
+              horizontalAlignment: 'CENTER',
+              verticalAlignment: 'MIDDLE',
+            },
+          },
+          fields: 'userEnteredFormat(horizontalAlignment,verticalAlignment)',
+        },
+      })
+    }
+    requests.push({
+      repeatCell: {
+        range: {
+          sheetId,
+          startRowIndex: 1,
+          endRowIndex: 500,
+          startColumnIndex: spec.noteCol,
+          endColumnIndex: spec.noteCol + 1,
+        },
+        cell: {
+          userEnteredFormat: {
+            horizontalAlignment: 'LEFT',
+            verticalAlignment: 'MIDDLE',
+          },
+        },
+        fields: 'userEnteredFormat(horizontalAlignment,verticalAlignment)',
+      },
+    })
   }
 
   if (valueData.length) {
@@ -682,8 +819,6 @@ export async function styleSpreadsheet(auth, spreadsheetId) {
       requestBody: { requests },
     })
   }
-
-  await rebuildSpendLayout(auth, spreadsheetId)
   return { ok: true }
 }
 
@@ -765,13 +900,20 @@ async function spreadsheetStillExists(auth, spreadsheetId) {
 
 /**
  * Return user's sheet, or create a fresh empty Expense Tracker sheet if missing/deleted.
- * @param {{ polish?: boolean }} opts - polish=true restyles an existing sheet (login / repair)
+ * @param {{ polish?: boolean, checkExists?: boolean }} opts
+ *   polish — full restyle + rebuild (login / repair only)
+ *   checkExists — hit Sheets API to verify file still exists (avoid on every request — quota)
  */
 export async function ensureUserSpreadsheet(auth, user, opts = {}) {
   const polish = Boolean(opts.polish)
+  // Default: trust DB id; only probe Drive when checkExists:true (deleted-file recovery)
+  const checkExists = Boolean(opts.checkExists) && Boolean(user?.spreadsheet_id)
 
   if (user?.spreadsheet_id) {
-    const exists = await spreadsheetStillExists(auth, user.spreadsheet_id)
+    let exists = true
+    if (checkExists) {
+      exists = await spreadsheetStillExists(auth, user.spreadsheet_id)
+    }
     if (exists) {
       if (polish) {
         try {
@@ -780,7 +922,6 @@ export async function ensureUserSpreadsheet(auth, user, opts = {}) {
           if (!isSpreadsheetMissingError(err)) {
             console.warn('styleSpreadsheet skipped:', err.message)
           } else {
-            // Deleted between check and style — fall through to recreate
             const created = await createBlankKharchaSpreadsheet(auth, 'Expense Tracker')
             return { ...created, recreated: true }
           }
@@ -794,7 +935,6 @@ export async function ensureUserSpreadsheet(auth, user, opts = {}) {
         recreated: false,
       }
     }
-    // Deleted — create a new empty sheet
     const created = await createBlankKharchaSpreadsheet(auth, 'Expense Tracker')
     return { ...created, recreated: true }
   }
@@ -811,6 +951,11 @@ export async function ensureUserSpreadsheet(auth, user, opts = {}) {
   }
   const created = await createBlankKharchaSpreadsheet(auth, 'Expense Tracker')
   return { ...created, recreated: false }
+}
+
+export function isQuotaError(err) {
+  const msg = String(err?.message || err || '')
+  return /Quota exceeded|RATE_LIMIT|429/i.test(msg)
 }
 
 function findLastRowForDate(rows, dateObj) {
@@ -914,7 +1059,7 @@ export async function addExpense(auth, spreadsheetId, payload) {
   const meta = await getSheetMeta(auth, spreadsheetId)
   const sheetId = meta.find((s) => s.properties.title === sheetName)?.properties.sheetId
   if (sheetId != null && row) {
-    await formatDataRow(auth, spreadsheetId, sheetId, row, 10)
+    await formatDataRow(auth, spreadsheetId, sheetId, row, 10, 10)
   }
   return { row, total, updated: Boolean(found.row) }
 }
@@ -945,7 +1090,7 @@ export async function addIncome(auth, spreadsheetId, payload) {
   const meta = await getSheetMeta(auth, spreadsheetId)
   const sheetId = meta.find((s) => s.properties.title === sheetName)?.properties.sheetId
   if (sheetId != null && row) {
-    await formatDataRow(auth, spreadsheetId, sheetId, row, 4) // B–D
+    await formatDataRow(auth, spreadsheetId, sheetId, row, 4, 4) // B–D currency; Source left
   }
   return { row, total, updated: Boolean(found.row) }
 }
@@ -972,7 +1117,7 @@ export async function addCreditCard(auth, spreadsheetId, payload) {
   const meta = await getSheetMeta(auth, spreadsheetId)
   const sheetId = meta.find((s) => s.properties.title === sheetName)?.properties.sheetId
   if (sheetId != null && row) {
-    await formatDataRow(auth, spreadsheetId, sheetId, row, 2) // B
+    await formatDataRow(auth, spreadsheetId, sheetId, row, 2, 2) // B currency; note left
   }
   return { row, total, updated: Boolean(found.row) }
 }

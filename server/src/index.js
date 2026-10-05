@@ -13,11 +13,14 @@ import {
   addCreditCard,
   addExpense,
   addIncome,
+  applySheetChrome,
   buildSummary,
   ensureUserSpreadsheet,
   getEntry,
   getMonthDetail,
+  isQuotaError,
   isSpreadsheetMissingError,
+  SHEET_LAYOUT_VERSION,
   styleSpreadsheet,
 } from './sheets.js'
 
@@ -25,6 +28,9 @@ const app = express()
 const PORT = Number(process.env.PORT || 8787)
 const ORIGIN = process.env.APP_ORIGIN || 'http://127.0.0.1:5173'
 const COOKIE = 'kharcha_session'
+
+/** googleId -> layout version last applied (avoid Sheets quota from restyling every request) */
+const layoutApplied = new Map()
 
 app.use(
   cors({
@@ -57,15 +63,42 @@ function requireUser(req, res, next) {
 }
 
 /** If Drive file was deleted, create a fresh empty sheet and remember it. */
-async function recoverSpreadsheetIfNeeded(req, { polish = false } = {}) {
+async function recoverSpreadsheetIfNeeded(req, { polish = false, checkExists = false } = {}) {
+  // Already have a sheet id — skip existence probe unless asked (saves read quota)
+  if (req.user.spreadsheet_id && !polish && !checkExists) {
+    return {
+      spreadsheetId: req.user.spreadsheet_id,
+      spreadsheetUrl: req.user.spreadsheet_url,
+      recreated: false,
+    }
+  }
   const auth = authedClientForUser(req.user)
-  const sheet = await ensureUserSpreadsheet(auth, req.user, { polish })
+  const sheet = await ensureUserSpreadsheet(auth, req.user, { polish, checkExists })
   if (sheet.recreated || sheet.spreadsheetId !== req.user.spreadsheet_id) {
     setUserSpreadsheet(req.user.google_id, sheet.spreadsheetId, sheet.spreadsheetUrl)
     req.user.spreadsheet_id = sheet.spreadsheetId
     req.user.spreadsheet_url = sheet.spreadsheetUrl
+    layoutApplied.delete(req.user.google_id)
   }
   return sheet
+}
+
+/** Apply column widths / alignment at most once per layout version (not every page load). */
+async function maybeApplySheetChrome(req) {
+  if (!req.user?.spreadsheet_id) return
+  if (layoutApplied.get(req.user.google_id) === SHEET_LAYOUT_VERSION) return
+  try {
+    const auth = authedClientForUser(req.user)
+    await applySheetChrome(auth, req.user.spreadsheet_id)
+    layoutApplied.set(req.user.google_id, SHEET_LAYOUT_VERSION)
+  } catch (err) {
+    if (isQuotaError(err)) {
+      console.warn('applySheetChrome deferred (quota):', err.message)
+      return
+    }
+    if (isSpreadsheetMissingError(err)) throw err
+    console.warn('applySheetChrome skipped:', err.message)
+  }
 }
 
 app.get('/health', (_req, res) => {
@@ -109,35 +142,32 @@ app.get('/api/me', async (req, res) => {
   if (!sid) return res.json({ ok: true, data: { user: null } })
   const user = getSession(sid)
   if (!user) return res.json({ ok: true, data: { user: null } })
-
-  try {
-    req.user = user
-    // Restyle on session load so column widths / banners stay healthy (incl. after formula fixes)
-    const sheet = await recoverSpreadsheetIfNeeded(req, { polish: true })
-    res.json({
-      ok: true,
-      data: {
-        user: publicUser(req.user),
-        sheetRecreated: Boolean(sheet.recreated),
-      },
-    })
-  } catch (err) {
-    console.error(err)
-    res.json({ ok: true, data: { user: publicUser(user) } })
-  }
+  // No Sheets API here — restyling on every load blew the read quota
+  res.json({ ok: true, data: { user: publicUser(user) } })
 })
 
 async function withSheets(req, res, fn) {
   try {
-    await recoverSpreadsheetIfNeeded(req)
+    await recoverSpreadsheetIfNeeded(req, { checkExists: false })
+    if (!req.user.spreadsheet_id) {
+      // First-time user — create sheet once
+      await recoverSpreadsheetIfNeeded(req, { polish: true, checkExists: false })
+    }
     if (!req.user.spreadsheet_id) {
       return res.status(400).json({ ok: false, error: 'Could not create spreadsheet. Try signing in again.' })
     }
+    await maybeApplySheetChrome(req)
     const auth = authedClientForUser(req.user)
     try {
       const data = await fn(auth, req.user.spreadsheet_id, req.body || {})
       return res.json({ ok: true, data })
     } catch (err) {
+      if (isQuotaError(err)) {
+        return res.status(429).json({
+          ok: false,
+          error: 'Google Sheets is rate-limiting us. Wait about a minute, then try again.',
+        })
+      }
       if (!isSpreadsheetMissingError(err)) throw err
       // Deleted mid-request — recreate once and retry
       const auth2 = authedClientForUser(req.user)
@@ -145,11 +175,18 @@ async function withSheets(req, res, fn) {
       setUserSpreadsheet(req.user.google_id, created.spreadsheetId, created.spreadsheetUrl)
       req.user.spreadsheet_id = created.spreadsheetId
       req.user.spreadsheet_url = created.spreadsheetUrl
+      layoutApplied.delete(req.user.google_id)
       const data = await fn(auth2, created.spreadsheetId, req.body || {})
       return res.json({ ok: true, data, sheetRecreated: true })
     }
   } catch (err) {
     console.error(err)
+    if (isQuotaError(err)) {
+      return res.status(429).json({
+        ok: false,
+        error: 'Google Sheets is rate-limiting us. Wait about a minute, then try again.',
+      })
+    }
     res.status(400).json({ ok: false, error: err.message || String(err) })
   }
 }
