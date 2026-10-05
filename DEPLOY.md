@@ -95,8 +95,9 @@ Railway’s free trial is short; always-on needs ~$5/mo. This stack stays on fre
 
 ## Checklist
 
-- [ ] Turso DB + token  
-- [ ] Vercel env vars set (empty `VITE_API_BASE`)  
-- [ ] `/health` ok  
-- [ ] Google redirect = `https://….vercel.app/auth/google/callback`  
+- [x] Turso DB + token  
+- [x] Vercel env vars set  
+- [x] `/health` ok on https://trackexpense.vercel.app  
+- [ ] Google Console origins + redirect URIs (see §3)  
+- [ ] OAuth consent **Publish app** so anyone can sign in  
 - [ ] Sign in once → sheet appears in Drive  
