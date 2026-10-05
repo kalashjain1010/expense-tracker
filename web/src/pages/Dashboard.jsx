@@ -74,6 +74,16 @@ export default function Dashboard() {
     }))
   }, [data])
 
+  const quickMonths = useMemo(() => {
+    const keys = []
+    const d = new Date()
+    for (let i = 0; i < 4; i++) {
+      const dt = new Date(d.getFullYear(), d.getMonth() - i, 1)
+      keys.push(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`)
+    }
+    return keys
+  }, [])
+
   if (loading && !data) return <DashboardSkeleton />
 
   if (error && !data) {
@@ -135,6 +145,36 @@ export default function Dashboard() {
           </div>
         </section>
       ) : null}
+
+      <section className="quick-actions" aria-label="Shortcuts">
+        <Link className="quick-card" to="/expense">
+          <span className="quick-ico" aria-hidden>
+            −
+          </span>
+          <span className="quick-label">Add spend</span>
+        </Link>
+        <button type="button" className="quick-card" onClick={() => setDetailMonth(thisMonthKey)}>
+          <span className="quick-ico" aria-hidden>
+            ▦
+          </span>
+          <span className="quick-label">This month</span>
+        </button>
+        {user?.spreadsheetUrl ? (
+          <a className="quick-card" href={user.spreadsheetUrl} target="_blank" rel="noreferrer">
+            <span className="quick-ico" aria-hidden>
+              ↗
+            </span>
+            <span className="quick-label">Open sheet</span>
+          </a>
+        ) : (
+          <Link className="quick-card" to="/income">
+            <span className="quick-ico" aria-hidden>
+              +
+            </span>
+            <span className="quick-label">Add income</span>
+          </Link>
+        )}
+      </section>
 
       <section className="hero-block">
         <div className="hero-top">
@@ -263,6 +303,13 @@ export default function Dashboard() {
                     Card <b>{formatINR(selectedMonth.credit)}</b>
                   </span>
                 </div>
+                <button
+                  type="button"
+                  className="btn ghost chart-open-month"
+                  onClick={() => setDetailMonth(selectedMonth.month)}
+                >
+                  Open month view
+                </button>
               </>
             ) : null}
           </div>
@@ -271,12 +318,35 @@ export default function Dashboard() {
 
       <section className="panel">
         <div className="panel-head">
-          <h2>Full month details</h2>
+          <h2>Month view</h2>
         </div>
-        <p className="muted tip">Any month — spend, income, and card load after you open it.</p>
+        <p className="muted tip">Tap a month for day-by-day spend, income, and card — or add from there.</p>
+        <div className="month-chip-row" role="list">
+          {quickMonths.map((key) => {
+            const opt = monthPickOptions.find((m) => m.month === key)
+            const isThis = key === thisMonthKey
+            return (
+              <button
+                key={key}
+                type="button"
+                role="listitem"
+                className={`month-chip ${isThis ? 'is-current' : ''} ${defaultPick === key ? 'is-selected' : ''}`}
+                onClick={() => {
+                  setPickMonth(key)
+                  setDetailMonth(key)
+                }}
+              >
+                <span className="month-chip-label">{monthLabelFromKey(key)}</span>
+                <span className="month-chip-val">
+                  {opt?.spend != null ? formatINR(opt.spend) : isThis ? formatINR(data.mtd.spend) : '—'}
+                </span>
+              </button>
+            )
+          })}
+        </div>
         <div className="month-pick-row">
           <label className="sr-only" htmlFor="month-pick">
-            Month
+            More months
           </label>
           <select
             id="month-pick"
@@ -297,7 +367,7 @@ export default function Dashboard() {
             disabled={!defaultPick}
             onClick={() => setDetailMonth(defaultPick)}
           >
-            View days
+            Open
           </button>
         </div>
       </section>

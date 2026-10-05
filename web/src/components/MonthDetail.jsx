@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMonthDetail } from '../hooks/useKharchaData'
+import { useAuth } from '../lib/auth'
 import { CATEGORY_LABELS, formatDisplayDate, formatINR, monthLabelFromKey } from '../lib/format'
 
 const TABS = [
@@ -12,6 +14,7 @@ const TABS = [
  * Full day-by-day breakdown for one month — Spend / Income / Card as separate tabs.
  */
 export default function MonthDetail({ month, onClose }) {
+  const { user } = useAuth()
   const { data, error, loading, refreshing, refetch } = useMonthDetail(month)
   const [tab, setTab] = useState('spend')
 
@@ -30,6 +33,9 @@ export default function MonthDetail({ month, onClose }) {
 
   if (!month) return null
 
+  const addPath = tab === 'income' ? '/income' : tab === 'credit' ? '/credit' : '/expense'
+  const addLabel = tab === 'income' ? 'Add income' : tab === 'credit' ? 'Add card' : 'Add spend'
+
   return (
     <section className="panel month-detail fade-in" aria-live="polite">
       <div className="panel-head">
@@ -47,6 +53,17 @@ export default function MonthDetail({ month, onClose }) {
         >
           {refreshing ? 'Updating…' : 'Refresh'}
         </button>
+      </div>
+
+      <div className="month-detail-actions">
+        <Link className="btn primary" to={addPath}>
+          {addLabel}
+        </Link>
+        {user?.spreadsheetUrl ? (
+          <a className="btn ghost" href={user.spreadsheetUrl} target="_blank" rel="noreferrer">
+            Open sheet
+          </a>
+        ) : null}
       </div>
 
       {loading && !data ? (
@@ -114,7 +131,11 @@ export default function MonthDetail({ month, onClose }) {
                 ) : (
                   <ul className="day-list">
                     {spendDays.map((day, i) => (
-                      <li key={day.date} className="day-card" style={{ animationDelay: `${Math.min(i, 8) * 0.04}s` }}>
+                      <li
+                        key={day.date}
+                        className="day-card"
+                        style={{ animationDelay: `${Math.min(i, 8) * 0.04}s` }}
+                      >
                         <div className="day-card-head">
                           <strong>{formatDisplayDate(day.date)}</strong>
                           {day.spend > 0 ? <span className="neg">−{formatINR(day.spend)}</span> : null}
@@ -143,7 +164,11 @@ export default function MonthDetail({ month, onClose }) {
               ) : (
                 <ul className="day-list">
                   {incomeDays.map((day, i) => (
-                    <li key={day.date} className="day-card" style={{ animationDelay: `${Math.min(i, 8) * 0.04}s` }}>
+                    <li
+                      key={day.date}
+                      className="day-card"
+                      style={{ animationDelay: `${Math.min(i, 8) * 0.04}s` }}
+                    >
                       <div className="day-card-head">
                         <strong>{formatDisplayDate(day.date)}</strong>
                         <span className="pos">+{formatINR(day.income)}</span>
@@ -161,7 +186,11 @@ export default function MonthDetail({ month, onClose }) {
               ) : (
                 <ul className="day-list">
                   {creditDays.map((day, i) => (
-                    <li key={day.date} className="day-card" style={{ animationDelay: `${Math.min(i, 8) * 0.04}s` }}>
+                    <li
+                      key={day.date}
+                      className="day-card"
+                      style={{ animationDelay: `${Math.min(i, 8) * 0.04}s` }}
+                    >
                       <div className="day-card-head">
                         <strong>{formatDisplayDate(day.date)}</strong>
                         <span className="neg">−{formatINR(day.credit)}</span>
@@ -173,8 +202,6 @@ export default function MonthDetail({ month, onClose }) {
               )
             ) : null}
           </div>
-
-          {data.demo ? <p className="muted tip center">Demo month — connect Apps Script for live days.</p> : null}
         </>
       ) : null}
     </section>

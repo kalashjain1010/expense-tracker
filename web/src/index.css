@@ -194,6 +194,221 @@ textarea {
   flex-shrink: 0;
 }
 
+.sheet-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  height: 36px;
+  padding: 0 0.7rem;
+  border-radius: 10px;
+  background: var(--green-soft);
+  color: var(--green-deep);
+  font-size: 0.78rem;
+  font-weight: 700;
+  transition: background 0.15s ease, transform 0.15s var(--ease);
+}
+
+.sheet-chip:hover {
+  background: rgba(26, 92, 69, 0.14);
+}
+
+.sheet-chip:active {
+  transform: scale(0.97);
+}
+
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+  animation: fadeUp 0.4s var(--ease) 0.05s both;
+}
+
+.quick-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0.75rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.15s var(--ease), border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.quick-card:hover {
+  border-color: rgba(26, 92, 69, 0.28);
+  box-shadow: 0 4px 16px rgba(18, 28, 23, 0.08);
+}
+
+.quick-card:active {
+  transform: scale(0.97);
+}
+
+.quick-ico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 8px;
+  background: var(--green-soft);
+  color: var(--green-deep);
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.quick-label {
+  line-height: 1.2;
+}
+
+.month-chip-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+  margin-top: 0.55rem;
+}
+
+.month-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  padding: 0.7rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s var(--ease);
+}
+
+.month-chip:active {
+  transform: scale(0.98);
+}
+
+.month-chip.is-current {
+  border-color: rgba(26, 92, 69, 0.35);
+  background: var(--green-soft);
+}
+
+.month-chip.is-selected {
+  border-color: var(--green);
+  box-shadow: 0 0 0 2px rgba(26, 92, 69, 0.12);
+}
+
+.month-chip-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.month-chip-val {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--green-deep);
+}
+
+.chart-open-month {
+  margin-top: 0.65rem;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.month-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.15rem 0 0.85rem;
+}
+
+.month-detail-actions .btn {
+  flex: 1;
+  min-width: 7rem;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(18, 28, 23, 0.45);
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease both;
+}
+
+@media (min-width: 480px) {
+  .confirm-backdrop {
+    align-items: center;
+  }
+}
+
+.confirm-dialog {
+  width: min(100%, 360px);
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 1.15rem 1.1rem 1.05rem;
+  box-shadow: 0 16px 48px rgba(18, 28, 23, 0.2);
+}
+
+.confirm-dialog h2 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 1.2rem;
+  margin: 0 0 0.35rem;
+  color: var(--green-deep);
+}
+
+.confirm-body {
+  margin: 0 0 1rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.confirm-actions .btn {
+  flex: 1;
+}
+
+.btn.primary.danger {
+  background: var(--danger);
+  box-shadow: 0 8px 20px rgba(179, 59, 46, 0.22);
+}
+
+.btn.primary.danger:hover:not(:disabled) {
+  background: #9a3228;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .login-card {
   align-items: stretch;
   text-align: center;

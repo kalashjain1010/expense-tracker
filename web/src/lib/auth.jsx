@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { fetchMe, loginUrl, logout as apiLogout, polishSheet } from '../lib/api'
+import { fetchMe, loginUrl, logout as apiLogout, polishSheet } from './api'
+import { clearAllCaches } from './queryCache'
 
 const AuthContext = createContext({
   user: null,
@@ -43,8 +44,27 @@ export function AuthProvider({ children }) {
     } catch {
       /* ignore */
     }
-    sessionStorage.removeItem('expense_sheet_styled_v2')
-    sessionStorage.removeItem('kharcha_sheet_styled')
+    clearAllCaches()
+    try {
+      const keys = []
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const k = sessionStorage.key(i)
+        if (
+          k &&
+          (k.startsWith('kharcha') ||
+            k.startsWith('expense') ||
+            k.startsWith('kharcha-') ||
+            k === 'expense_sheet_styled_v2')
+        ) {
+          keys.push(k)
+        }
+      }
+      keys.forEach((k) => sessionStorage.removeItem(k))
+      // Also drop the query cache key if naming differs
+      sessionStorage.removeItem('kharcha-cache-v1')
+    } catch {
+      /* ignore */
+    }
     setUser(null)
   }
 

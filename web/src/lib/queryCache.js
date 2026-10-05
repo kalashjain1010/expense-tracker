@@ -131,6 +131,18 @@ export function invalidate(keyOrPrefix) {
   listeners.forEach((fn) => fn(keyOrPrefix, null))
 }
 
+/** Wipe in-memory + sessionStorage cache (logout). */
+export function clearAllCaches() {
+  memory.clear()
+  inflight.clear()
+  try {
+    sessionStorage.removeItem(STORAGE_KEY)
+  } catch {
+    /* ignore */
+  }
+  listeners.forEach((fn) => fn('mutation', null))
+}
+
 /** After a write we know the sheet changed — drop summary + month caches, patch that entry. */
 export function invalidateAfterWrite({ type, date, entryPatch } = {}) {
   memory.delete(summaryKey())
