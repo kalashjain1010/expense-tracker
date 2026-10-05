@@ -387,7 +387,7 @@ async function formatDataRow(auth, spreadsheetId, sheetId, row1Based, currencyEn
 /**
  * Write month banner like personal Kharcha:
  * A = plain text "October 2026" (RAW — never auto-dated)
- * B = live SUMIFS across category columns
+ * B = live SUMIFS on Total Amount (col B) — manual sheet edits update the header
  */
 async function writeBannerRow(auth, spreadsheetId, sheetId, row1Based, year, monthIndex0, sheetName) {
   const sheets = sheetsApi(auth)
@@ -1215,7 +1215,8 @@ export async function addIncome(auth, spreadsheetId, payload) {
     await writeRow(auth, spreadsheetId, SHEET_INCOME, found.row, values)
     row = found.row
   } else {
-    row = await appendRow(auth, spreadsheetId, SHEET_INCOME, values)
+    row = Math.max(rows.length + 1, 2)
+    await writeRow(auth, spreadsheetId, SHEET_INCOME, row, values)
   }
   const sheetName = await resolveSheetName(auth, spreadsheetId, SHEET_INCOME)
   const meta = await getSheetMeta(auth, spreadsheetId)
@@ -1242,7 +1243,8 @@ export async function addCreditCard(auth, spreadsheetId, payload) {
     await writeRow(auth, spreadsheetId, SHEET_CC, found.row, values)
     row = found.row
   } else {
-    row = await appendRow(auth, spreadsheetId, SHEET_CC, values)
+    row = Math.max(rows.length + 1, 2)
+    await writeRow(auth, spreadsheetId, SHEET_CC, row, values)
   }
   const sheetName = await resolveSheetName(auth, spreadsheetId, SHEET_CC)
   const meta = await getSheetMeta(auth, spreadsheetId)
