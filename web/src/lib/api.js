@@ -1,11 +1,7 @@
 import { invalidateAfterWrite } from './queryCache'
 
-// Empty string = same origin (Vercel). Local default hits the Express API.
-const API_BASE = (
-  import.meta.env.VITE_API_BASE !== undefined && import.meta.env.VITE_API_BASE !== null
-    ? String(import.meta.env.VITE_API_BASE)
-    : 'http://127.0.0.1:8787'
-).replace(/\/$/, '')
+// Same-origin by default (Vercel). Local: set VITE_API_BASE=http://127.0.0.1:8787 in web/.env
+const API_BASE = String(import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
 
 async function api(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {

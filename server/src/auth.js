@@ -20,11 +20,25 @@ export function oauthConfigured() {
   return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)
 }
 
-export function createOAuthClient(redirectUri = process.env.GOOGLE_REDIRECT_URI) {
+function resolveRedirectUri(redirectUri) {
+  if (redirectUri) return redirectUri
+  if (process.env.GOOGLE_REDIRECT_URI) return process.env.GOOGLE_REDIRECT_URI
+  // On Vercel, never fall back to localhost — use the public app origin
+  const origin = process.env.APP_ORIGIN
+  if (origin && !/localhost|127\.0\.0\.1/i.test(origin)) {
+    return `${origin.replace(/\/$/, '')}/auth/google/callback`
+  }
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/auth/google/callback`
+  }
+  return 'http://127.0.0.1:8787/auth/google/callback'
+}
+
+export function createOAuthClient(redirectUri) {
   return new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    redirectUri,
+    resolveRedirectUri(redirectUri),
   )
 }
 
