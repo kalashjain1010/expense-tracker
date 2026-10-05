@@ -679,6 +679,8 @@ textarea {
   align-self: stretch;
   margin-top: 0.35rem;
   width: 100%;
+  text-decoration: none;
+  color: #fff;
 }
 
 .main {
