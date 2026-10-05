@@ -93,11 +93,21 @@ OAuth consent **Testing** = only Test users.
 
 Railway’s free trial is short; always-on needs ~$5/mo. This stack stays on free tiers (Vercel Hobby + Turso Free) within normal personal-use quotas.
 
-## Checklist
+## Mobile app (Android SMS import)
 
-- [x] Turso DB + token  
-- [x] Vercel env vars set  
-- [x] `/health` ok on https://trackexpense.vercel.app  
-- [ ] Google Console origins + redirect URIs (see §3)  
-- [ ] OAuth consent **Publish app** so anyone can sign in  
-- [ ] Sign in once → sheet appears in Drive  
+Internal APK repo: [expense-tracker-mobile](https://github.com/kalashjain1010/expense-tracker-mobile)
+
+Add this **Authorized redirect URI** on the same Google OAuth Web client:
+```
+https://trackexpense.vercel.app/auth/google/mobile/callback
+```
+
+Optional Vercel env:
+```
+GOOGLE_MOBILE_REDIRECT_URI=https://trackexpense.vercel.app/auth/google/mobile/callback
+MOBILE_APP_REDIRECT=expensetracker://auth/callback
+GEMINI_API_KEY=
+```
+
+Routes: `/auth/google/mobile`, `/auth/google/mobile/callback`, `POST /api/expense/import-suggest`, `POST /api/expense/import` (Bearer session supported).
+  

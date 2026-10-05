@@ -42,8 +42,8 @@ export function createOAuthClient(redirectUri) {
   )
 }
 
-export function getAuthUrl() {
-  const client = createOAuthClient()
+export function getAuthUrl(redirectUri) {
+  const client = createOAuthClient(redirectUri)
   return client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
@@ -51,8 +51,22 @@ export function getAuthUrl() {
   })
 }
 
-export async function handleOAuthCallback(code) {
-  const client = createOAuthClient()
+/** Deep link used after mobile OAuth completes (custom scheme). */
+export function mobileAppRedirectBase() {
+  return process.env.MOBILE_APP_REDIRECT || 'expensetracker://auth/callback'
+}
+
+export function mobileOAuthRedirectUri() {
+  if (process.env.GOOGLE_MOBILE_REDIRECT_URI) return process.env.GOOGLE_MOBILE_REDIRECT_URI
+  const origin = process.env.APP_ORIGIN
+  if (origin && !/localhost|127\.0\.0\.1/i.test(origin)) {
+    return `${origin.replace(/\/$/, '')}/auth/google/mobile/callback`
+  }
+  return resolveRedirectUri()
+}
+
+export async function handleOAuthCallback(code, redirectUri) {
+  const client = createOAuthClient(redirectUri)
   const { tokens } = await client.getToken(code)
   client.setCredentials(tokens)
 
