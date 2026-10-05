@@ -17,9 +17,9 @@ export function AuthProvider({ children }) {
     try {
       const data = await fetchMe()
       setUser(data.user || null)
-      if (data.user?.spreadsheetId && !sessionStorage.getItem('kharcha_sheet_styled')) {
+      if (data.user?.spreadsheetId && !sessionStorage.getItem('expense_sheet_styled_v2')) {
         polishSheet()
-          .then(() => sessionStorage.setItem('kharcha_sheet_styled', '1'))
+          .then(() => sessionStorage.setItem('expense_sheet_styled_v2', '1'))
           .catch(() => {})
       }
     } catch {
@@ -43,6 +43,7 @@ export function AuthProvider({ children }) {
     } catch {
       /* ignore */
     }
+    sessionStorage.removeItem('expense_sheet_styled_v2')
     sessionStorage.removeItem('kharcha_sheet_styled')
     setUser(null)
   }

@@ -160,16 +160,33 @@ function monthTotalFormula(year, monthIndex0) {
   const startM = monthIndex0 + 1
   const endY = monthIndex0 === 11 ? year + 1 : year
   const endM = monthIndex0 === 11 ? 1 : monthIndex0 + 2
-  return `=SUMIFS(B:B,A:A,">="&DATE(${year},${startM},1),A:A,"<"&DATE(${endY},${endM},1))`
+  // Sheets API formulaValue must NOT include leading '='
+  return `SUMIFS(B:B,A:A,">="&DATE(${year},${startM},1),A:A,"<"&DATE(${endY},${endM},1))`
 }
 
 function isBannerLabel(v) {
   if (v == null || v === '') return false
-  if (v instanceof Date) return false
   if (typeof v === 'number') return false
+  if (v instanceof Date) return false
   const s = String(v).trim()
   if (!s || /^\d/.test(s)) return false
   return /[a-zA-Z]/.test(s)
+}
+
+/** Day-1 date + no category amounts → likely a banner that Sheets turned into a date. */
+function isCorruptBannerRow(row) {
+  const d = coerceDate(row?.[0])
+  if (!d || d.getDate() !== 1) return false
+  const note = row[10]
+  if (note) return false
+  for (let c = 2; c <= 9; c++) {
+    if (num(row[c]) !== 0) return false
+  }
+  // #REF! / empty / broken total in B also counts
+  const b = row[1]
+  if (b === '#REF!' || b === '' || b == null || String(b).startsWith('#')) return true
+  // Pure day-1 with zero total and no cats — treat as corrupt banner
+  return num(b) === 0
 }
 
 function findMonthBannerRow(rows, year, monthIndex0) {
@@ -177,11 +194,16 @@ function findMonthBannerRow(rows, year, monthIndex0) {
   const monthOnly = want.split(' ')[0]
   for (let i = 1; i < rows.length; i++) {
     const v = rows[i][0]
-    if (!isBannerLabel(v)) continue
-    if (coerceDate(v)) continue
-    const lower = String(v).toLowerCase().replace(/\s+/g, ' ').trim()
-    if (lower.indexOf(monthOnly) === 0 && lower.includes(String(year))) {
-      return i + 1 // 1-based sheet row
+    if (isBannerLabel(v)) {
+      const lower = String(v).toLowerCase().replace(/\s+/g, ' ').trim()
+      if (lower.indexOf(monthOnly) === 0 && lower.includes(String(year))) {
+        return i + 1
+      }
+      continue
+    }
+    const d = coerceDate(v)
+    if (d && d.getFullYear() === year && d.getMonth() === monthIndex0 && isCorruptBannerRow(rows[i])) {
+      return i + 1
     }
   }
   return 0
@@ -209,7 +231,7 @@ async function formatDataRow(auth, spreadsheetId, sheetId, row1Based, currencyEn
             cell: {
               userEnteredFormat: {
                 numberFormat: { type: 'DATE', pattern: 'd mmmm yyyy' },
-                textFormat: { fontFamily: 'Arial', fontSize: 10 },
+                textFormat: { fontFamily: 'Arial', fontSize: 10, bold: false },
               },
             },
             fields: 'userEnteredFormat(numberFormat,textFormat)',
@@ -227,7 +249,7 @@ async function formatDataRow(auth, spreadsheetId, sheetId, row1Based, currencyEn
             cell: {
               userEnteredFormat: {
                 numberFormat: { type: 'CURRENCY', pattern: '₹#,##0.00' },
-                textFormat: { fontFamily: 'Arial', fontSize: 10 },
+                textFormat: { fontFamily: 'Arial', fontSize: 10, bold: false },
               },
             },
             fields: 'userEnteredFormat(numberFormat,textFormat)',
@@ -238,9 +260,13 @@ async function formatDataRow(auth, spreadsheetId, sheetId, row1Based, currencyEn
   })
 }
 
-async function styleBannerRow(auth, spreadsheetId, sheetId, row1Based) {
+/** Write month banner as TEXT label + formula (never USER_ENTERED — that turns "October 2026" into a date). */
+async function writeBannerRow(auth, spreadsheetId, sheetId, row1Based, year, monthIndex0) {
   const sheets = sheetsApi(auth)
+  const label = monthLabel(new Date(year, monthIndex0, 1))
+  const formula = monthTotalFormula(year, monthIndex0)
   const r = row1Based - 1
+  const empty = { userEnteredValue: { stringValue: '' } }
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId,
     requestBody: {
@@ -253,43 +279,44 @@ async function styleBannerRow(auth, spreadsheetId, sheetId, row1Based) {
           },
         },
         {
-          repeatCell: {
-            range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 11 },
-            cell: {
-              userEnteredFormat: {
-                backgroundColor: { red: 1, green: 1, blue: 1 },
-                textFormat: {
-                  fontFamily: 'Arial',
-                  fontSize: 18,
-                  bold: true,
-                  foregroundColor: { red: 0, green: 0, blue: 0 },
-                },
-                verticalAlignment: 'MIDDLE',
-                horizontalAlignment: 'LEFT',
-                wrapStrategy: 'OVERFLOW_CELL',
+          updateCells: {
+            start: { sheetId, rowIndex: r, columnIndex: 0 },
+            rows: [
+              {
+                values: [
+                  {
+                    userEnteredValue: { stringValue: label },
+                    userEnteredFormat: {
+                      numberFormat: { type: 'TEXT' },
+                      textFormat: {
+                        fontFamily: 'Arial',
+                        fontSize: 18,
+                        bold: true,
+                        foregroundColor: { red: 0, green: 0, blue: 0 },
+                      },
+                      verticalAlignment: 'MIDDLE',
+                      horizontalAlignment: 'LEFT',
+                    },
+                  },
+                  {
+                    userEnteredValue: { formulaValue: formula },
+                    userEnteredFormat: {
+                      numberFormat: { type: 'CURRENCY', pattern: '₹#,##0.00' },
+                      textFormat: {
+                        fontFamily: 'Arial',
+                        fontSize: 18,
+                        bold: true,
+                        foregroundColor: { red: 0, green: 0, blue: 0 },
+                      },
+                      horizontalAlignment: 'LEFT',
+                      verticalAlignment: 'MIDDLE',
+                    },
+                  },
+                  ...Array(9).fill(empty),
+                ],
               },
-            },
-            fields:
-              'userEnteredFormat(backgroundColor,textFormat,verticalAlignment,horizontalAlignment,wrapStrategy)',
-          },
-        },
-        {
-          repeatCell: {
-            range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 1 },
-            cell: { userEnteredFormat: { numberFormat: { type: 'TEXT' } } },
-            fields: 'userEnteredFormat.numberFormat',
-          },
-        },
-        {
-          repeatCell: {
-            range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 1, endColumnIndex: 2 },
-            cell: {
-              userEnteredFormat: {
-                numberFormat: { type: 'CURRENCY', pattern: '₹#,##0.00' },
-                horizontalAlignment: 'LEFT',
-              },
-            },
-            fields: 'userEnteredFormat(numberFormat,horizontalAlignment)',
+            ],
+            fields: 'userEnteredValue,userEnteredFormat',
           },
         },
       ],
@@ -298,42 +325,193 @@ async function styleBannerRow(auth, spreadsheetId, sheetId, row1Based) {
 }
 
 /**
- * Ensure month banner exists: 2 blank rows + "Month YYYY" + SUMIFS in Total Amount.
- * Matches personal Kharcha sheet layout.
+ * Full Spend-tab rebuild like personal Kharcha:
+ * header stays; body becomes [2 blanks][Month YYYY + SUMIFS][day rows…] per month.
  */
-async function ensureMonthBanner(auth, spreadsheetId, dateObj) {
+async function rebuildSpendLayout(auth, spreadsheetId) {
   const sheets = sheetsApi(auth)
+  const sheetName = await resolveSheetName(auth, spreadsheetId, SHEET_EXPENSE)
+  const meta = await getSheetMeta(auth, spreadsheetId)
+  const sheetId = meta.find((s) => s.properties.title === sheetName)?.properties.sheetId
+  if (sheetId == null) return { ok: false }
+
+  const rows = await readSheetValues(auth, spreadsheetId, SHEET_EXPENSE)
+  const entries = []
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i]
+    if (isBannerLabel(row[0])) continue
+    if (isCorruptBannerRow(row)) continue
+    const d = coerceDate(row[0])
+    if (!d) continue
+    const cats = []
+    let catSum = 0
+    for (let c = 0; c < 8; c++) {
+      const amt = num(row[2 + c])
+      cats.push(amt === 0 ? '' : amt)
+      catSum += amt
+    }
+    const total = num(row[1]) || catSum
+    entries.push({
+      date: d,
+      total: total === 0 ? '' : total,
+      cats,
+      note: row[10] || '',
+      key: `${d.getFullYear()}-${d.getMonth()}`,
+    })
+  }
+  entries.sort((a, b) => a.date.getTime() - b.date.getTime())
+
+  // Clear body (keep header)
+  const clearTo = Math.max(rows.length + 5, 40)
+  await sheets.spreadsheets.values.clear({
+    spreadsheetId,
+    range: `'${sheetName}'!A2:K${clearTo}`,
+  })
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId,
+    requestBody: {
+      requests: [
+        {
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: 1,
+              endRowIndex: clearTo,
+              startColumnIndex: 0,
+              endColumnIndex: 11,
+            },
+            cell: {
+              userEnteredFormat: {
+                textFormat: { fontFamily: 'Arial', fontSize: 10, bold: false },
+                backgroundColor: { red: 1, green: 1, blue: 1 },
+              },
+            },
+            fields: 'userEnteredFormat(textFormat,backgroundColor)',
+          },
+        },
+      ],
+    },
+  })
+
+  if (!entries.length) {
+    // Empty sheet — still seed this month's banner after 2 blanks
+    const now = new Date()
+    await writeBannerRow(auth, spreadsheetId, sheetId, 4, now.getFullYear(), now.getMonth())
+    // two blanks are just empty rows 2–3
+    return { ok: true, rows: 0, months: 1 }
+  }
+
+  const out = []
+  const bannerMeta = [] // { outIndex, year, month }
+  let prevKey = null
+  for (const ent of entries) {
+    if (ent.key !== prevKey) {
+      out.push(Array(11).fill(''))
+      out.push(Array(11).fill(''))
+      bannerMeta.push({
+        outIndex: out.length,
+        year: ent.date.getFullYear(),
+        month: ent.date.getMonth(),
+      })
+      out.push(Array(11).fill('')) // placeholder; written via updateCells
+      prevKey = ent.key
+    }
+    out.push([
+      `=DATE(${ent.date.getFullYear()},${ent.date.getMonth() + 1},${ent.date.getDate()})`,
+      ent.total,
+      ...ent.cats,
+      ent.note,
+    ])
+  }
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId,
+    range: `'${sheetName}'!A2`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: { values: out },
+  })
+
+  // Write real banners (text + formula) and format day rows
+  for (const b of bannerMeta) {
+    const sheetRow = 2 + b.outIndex
+    await writeBannerRow(auth, spreadsheetId, sheetId, sheetRow, b.year, b.month)
+  }
+
+  const formatReqs = []
+  for (let i = 0; i < out.length; i++) {
+    const a = out[i][0]
+    if (typeof a === 'string' && a.startsWith('=DATE(')) {
+      const r = 1 + i // 0-based row index in sheet (row 2 = index 1)
+      formatReqs.push(
+        {
+          repeatCell: {
+            range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 0, endColumnIndex: 1 },
+            cell: {
+              userEnteredFormat: {
+                numberFormat: { type: 'DATE', pattern: 'd mmmm yyyy' },
+                textFormat: { fontFamily: 'Arial', fontSize: 10, bold: false },
+              },
+            },
+            fields: 'userEnteredFormat(numberFormat,textFormat)',
+          },
+        },
+        {
+          repeatCell: {
+            range: { sheetId, startRowIndex: r, endRowIndex: r + 1, startColumnIndex: 1, endColumnIndex: 10 },
+            cell: {
+              userEnteredFormat: {
+                numberFormat: { type: 'CURRENCY', pattern: '₹#,##0.00' },
+                textFormat: { fontFamily: 'Arial', fontSize: 10, bold: false },
+              },
+            },
+            fields: 'userEnteredFormat(numberFormat,textFormat)',
+          },
+        },
+      )
+    }
+  }
+  if (formatReqs.length) {
+    // batch in chunks of 40
+    for (let i = 0; i < formatReqs.length; i += 40) {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests: formatReqs.slice(i, i + 40) },
+      })
+    }
+  }
+
+  return { ok: true, rows: entries.length, months: bannerMeta.length }
+}
+
+async function ensureMonthBanner(auth, spreadsheetId, dateObj) {
   const sheetName = await resolveSheetName(auth, spreadsheetId, SHEET_EXPENSE)
   const rows = await readSheetValues(auth, spreadsheetId, SHEET_EXPENSE)
   const year = dateObj.getFullYear()
   const month = dateObj.getMonth()
   const existing = findMonthBannerRow(rows, year, month)
-  if (existing) return existing
+  if (existing) {
+    const meta = await getSheetMeta(auth, spreadsheetId)
+    const sheetId = meta.find((s) => s.properties.title === sheetName)?.properties.sheetId
+    if (sheetId != null) await writeBannerRow(auth, spreadsheetId, sheetId, existing, year, month)
+    return existing
+  }
 
-  const label = monthLabel(dateObj)
-  const formula = monthTotalFormula(year, month)
-  const blank = Array(11).fill('')
-  const banner = [label, formula, '', '', '', '', '', '', '', '', '']
-
-  // Append 2 blanks + banner after current content
-  const startRow = Math.max(rows.length, 1) + 1 // next empty 1-based row
+  const sheets = sheetsApi(auth)
+  const meta = await getSheetMeta(auth, spreadsheetId)
+  const sheetId = meta.find((s) => s.properties.title === sheetName)?.properties.sheetId
+  const startRow = Math.max(rows.length, 1) + 1
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `'${sheetName}'!A${startRow}`,
-    valueInputOption: 'USER_ENTERED',
-    requestBody: { values: [blank, blank, banner] },
+    valueInputOption: 'RAW',
+    requestBody: { values: [Array(11).fill(''), Array(11).fill('')] },
   })
-
   const bannerRow = startRow + 2
-  const meta = await getSheetMeta(auth, spreadsheetId)
-  const sheet = meta.find((s) => s.properties.title === sheetName)
-  if (sheet) {
-    await styleBannerRow(auth, spreadsheetId, sheet.properties.sheetId, bannerRow)
-  }
+  if (sheetId != null) await writeBannerRow(auth, spreadsheetId, sheetId, bannerRow, year, month)
   return bannerRow
 }
 
-/** Apply polished header + column layout (+ seed current month banner). */
+/** Apply header styling to all tabs, then rebuild Spend layout cleanly. */
 export async function styleSpreadsheet(auth, spreadsheetId) {
   const sheets = sheetsApi(auth)
   const metaSheets = await getSheetMeta(auth, spreadsheetId)
@@ -370,6 +548,7 @@ export async function styleSpreadsheet(auth, spreadsheetId) {
     const sheetId = byTitle[title]
     if (sheetId == null) continue
 
+    // Headers via RAW so nothing is auto-parsed
     valueData.push({ range: `'${title}'!A1`, values: [spec.headers] })
 
     requests.push({
@@ -384,7 +563,6 @@ export async function styleSpreadsheet(auth, spreadsheetId) {
       },
     })
 
-    // Header — match personal sheet (#0f5132, Arial 10 bold white, row height 28)
     requests.push({
       repeatCell: {
         range: {
@@ -430,30 +608,12 @@ export async function styleSpreadsheet(auth, spreadsheetId) {
         },
       })
     })
-
-    // Default body font Arial 10
-    requests.push({
-      repeatCell: {
-        range: {
-          sheetId,
-          startRowIndex: 1,
-          startColumnIndex: 0,
-          endColumnIndex: spec.cols,
-        },
-        cell: {
-          userEnteredFormat: {
-            textFormat: { fontFamily: 'Arial', fontSize: 10, bold: false },
-          },
-        },
-        fields: 'userEnteredFormat.textFormat',
-      },
-    })
   }
 
   if (valueData.length) {
     await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId,
-      requestBody: { valueInputOption: 'USER_ENTERED', data: valueData },
+      requestBody: { valueInputOption: 'RAW', data: valueData },
     })
   }
   if (requests.length) {
@@ -463,38 +623,7 @@ export async function styleSpreadsheet(auth, spreadsheetId) {
     })
   }
 
-  // Seed / refresh current-month banner with live SUMIFS total
-  await ensureMonthBanner(auth, spreadsheetId, new Date())
-
-  // Re-style existing banner rows + refresh formulas
-  const expenseName = await resolveSheetName(auth, spreadsheetId, SHEET_EXPENSE)
-  const expenseId = (await getSheetMeta(auth, spreadsheetId)).find((s) => s.properties.title === expenseName)
-    ?.properties.sheetId
-  const rows = await readSheetValues(auth, spreadsheetId, SHEET_EXPENSE)
-  if (expenseId != null) {
-    for (let i = 1; i < rows.length; i++) {
-      const v = rows[i][0]
-      if (!isBannerLabel(v)) continue
-      const parts = String(v).trim().split(/\s+/)
-      if (parts.length < 2) continue
-      const monthNames = [
-        'january', 'february', 'march', 'april', 'may', 'june',
-        'july', 'august', 'september', 'october', 'november', 'december',
-      ]
-      const mi = monthNames.findIndex((m) => parts[0].toLowerCase().startsWith(m.slice(0, 3)))
-      const yearNum = Number(parts[1])
-      if (mi < 0 || !yearNum) continue
-      const sheetRow = i + 1
-      await sheets.spreadsheets.values.update({
-        spreadsheetId,
-        range: `'${expenseName}'!A${sheetRow}:B${sheetRow}`,
-        valueInputOption: 'USER_ENTERED',
-        requestBody: { values: [[monthLabel(new Date(yearNum, mi, 1)), monthTotalFormula(yearNum, mi)]] },
-      })
-      await styleBannerRow(auth, spreadsheetId, expenseId, sheetRow)
-    }
-  }
-
+  await rebuildSpendLayout(auth, spreadsheetId)
   return { ok: true }
 }
 
@@ -650,8 +779,9 @@ export async function addExpense(auth, spreadsheetId, payload) {
 
   const cats = payload.categories || {}
   const total = EXPENSE_CATEGORIES.reduce((s, k) => s + num(cats[k]), 0)
+  const dateFormula = `=DATE(${dateObj.getFullYear()},${dateObj.getMonth() + 1},${dateObj.getDate()})`
   const values = [
-    payload.date,
+    dateFormula,
     total || '',
     ...EXPENSE_CATEGORIES.map((k) => blankOrNum(cats[k])),
     payload.note || '',
@@ -670,7 +800,7 @@ export async function addExpense(auth, spreadsheetId, payload) {
   const meta = await getSheetMeta(auth, spreadsheetId)
   const sheetId = meta.find((s) => s.properties.title === sheetName)?.properties.sheetId
   if (sheetId != null && row) {
-    await formatDataRow(auth, spreadsheetId, sheetId, row, 10) // cols B–J
+    await formatDataRow(auth, spreadsheetId, sheetId, row, 10)
   }
   return { row, total, updated: Boolean(found.row) }
 }
@@ -681,7 +811,13 @@ export async function addIncome(auth, spreadsheetId, payload) {
   const you = num(payload.you ?? payload.kalash)
   const partner = num(payload.partner ?? payload.mummy)
   const total = you + partner
-  const values = [payload.date, blankOrNum(you), blankOrNum(partner), total || '', payload.source || '']
+  const values = [
+    `=DATE(${dateObj.getFullYear()},${dateObj.getMonth() + 1},${dateObj.getDate()})`,
+    blankOrNum(you),
+    blankOrNum(partner),
+    total || '',
+    payload.source || '',
+  ]
   const rows = await readSheetValues(auth, spreadsheetId, SHEET_INCOME)
   const found = findLastRowForDate(rows, dateObj)
   let row
@@ -704,7 +840,11 @@ export async function addCreditCard(auth, spreadsheetId, payload) {
   const dateObj = parseISODate(payload.date)
   if (toISODate(dateObj) > toISODate(new Date())) throw new Error('Future dates are not allowed')
   const total = num(payload.total)
-  const values = [payload.date, blankOrNum(total), payload.items || '']
+  const values = [
+    `=DATE(${dateObj.getFullYear()},${dateObj.getMonth() + 1},${dateObj.getDate()})`,
+    blankOrNum(total),
+    payload.items || '',
+  ]
   const rows = await readSheetValues(auth, spreadsheetId, SHEET_CC)
   const found = findLastRowForDate(rows, dateObj)
   let row
