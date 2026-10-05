@@ -8,6 +8,11 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
+      workbox: {
+        // Never let the SW intercept OAuth / API — Google rejects those as fetch (403)
+        navigateFallbackDenylist: [/^\/api/, /^\/auth/, /^\/health/],
+        runtimeCaching: [],
+      },
       manifest: {
         name: 'Expense Tracker',
         short_name: 'Expense Tracker',

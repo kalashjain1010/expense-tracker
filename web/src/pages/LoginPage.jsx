@@ -1,5 +1,5 @@
 import KharchaLogo from '../components/KharchaLogo'
-import { useAuth } from '../lib/auth'
+import { loginUrl } from '../lib/api'
 
 const points = [
   'Sign in once with Google',
@@ -8,9 +8,10 @@ const points = [
 ]
 
 export default function LoginPage() {
-  const { login } = useAuth()
   const params = new URLSearchParams(window.location.search)
   const error = params.get('error')
+  // Real navigation (not fetch) — Google OAuth cannot run as XHR
+  const href = loginUrl() || '/auth/google'
 
   return (
     <div className="lock-screen">
@@ -27,9 +28,9 @@ export default function LoginPage() {
 
         {error ? <p className="lock-error">{error}</p> : null}
 
-        <button type="button" className="btn primary lock-btn" onClick={login}>
+        <a className="btn primary lock-btn" href={href}>
           Continue with Google
-        </button>
+        </a>
         <p className="muted tip center login-foot">
           Free · Private · Your sheet, your data
         </p>
