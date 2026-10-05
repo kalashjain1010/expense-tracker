@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { fetchMe, loginUrl, logout as apiLogout } from '../lib/api'
+import { fetchMe, loginUrl, logout as apiLogout, polishSheet } from '../lib/api'
 
 const AuthContext = createContext({
   user: null,
@@ -17,6 +17,11 @@ export function AuthProvider({ children }) {
     try {
       const data = await fetchMe()
       setUser(data.user || null)
+      if (data.user?.spreadsheetId && !sessionStorage.getItem('kharcha_sheet_styled')) {
+        polishSheet()
+          .then(() => sessionStorage.setItem('kharcha_sheet_styled', '1'))
+          .catch(() => {})
+      }
     } catch {
       setUser(null)
     } finally {
@@ -38,6 +43,7 @@ export function AuthProvider({ children }) {
     } catch {
       /* ignore */
     }
+    sessionStorage.removeItem('kharcha_sheet_styled')
     setUser(null)
   }
 

@@ -16,6 +16,7 @@ import {
   buildSummary,
   getEntry,
   getMonthDetail,
+  styleSpreadsheet,
 } from './sheets.js'
 
 const app = express()
@@ -135,6 +136,10 @@ app.post('/api/income', requireUser, (req, res) =>
 )
 app.post('/api/credit', requireUser, (req, res) =>
   withSheets(req, res, (auth, id, body) => addCreditCard(auth, id, body)),
+)
+
+app.post('/api/sheet/style', requireUser, (req, res) =>
+  withSheets(req, res, (auth, id) => styleSpreadsheet(auth, id)),
 )
 
 app.listen(PORT, () => {

@@ -79,7 +79,7 @@ export default function AppShell() {
           </span>
           <span className="brand-wrap">
             <span className="brand">Kharcha</span>
-            <span className="brand-sub">Your sheet, your data</span>
+            <span className="brand-sub">Your sheet · your money</span>
           </span>
         </Link>
         <div className="topbar-actions">

@@ -8,23 +8,22 @@ import { formatINR, todayISO } from '../lib/format'
 
 export default function IncomePage() {
   const [date, setDate] = useState(todayISO())
-  const [kalash, setKalash] = useState('')
-  const [mummy, setMummy] = useState('')
+  const [you, setYou] = useState('')
+  const [partner, setPartner] = useState('')
   const [source, setSource] = useState('')
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState(null)
   const { data: existing, loading, refreshing, error: loadError } = useEntry('income', date)
 
-  const total = useMemo(() => (Number(kalash) || 0) + (Number(mummy) || 0), [kalash, mummy])
+  const total = useMemo(() => (Number(you) || 0) + (Number(partner) || 0), [you, partner])
   const matched = Boolean(existing && (!existing.date || existing.date === date))
   const editing = Boolean(matched && existing.found && !loading)
   const loadingEntry = loading && !matched
   const busy = saving || loadingEntry
 
-  // Clear fields as soon as the date changes so we never show another day's values
   useEffect(() => {
-    setKalash('')
-    setMummy('')
+    setYou('')
+    setPartner('')
     setSource('')
     setStatus(null)
   }, [date])
@@ -34,12 +33,12 @@ export default function IncomePage() {
     if (!existing) return
     if (existing.date && existing.date !== date) return
     if (existing.found) {
-      setKalash(entryStr(existing.kalash))
-      setMummy(entryStr(existing.mummy))
+      setYou(entryStr(existing.you ?? existing.kalash))
+      setPartner(entryStr(existing.partner ?? existing.mummy))
       setSource(existing.source || '')
     } else {
-      setKalash('')
-      setMummy('')
+      setYou('')
+      setPartner('')
       setSource('')
     }
   }, [existing, date, loading])
@@ -51,17 +50,17 @@ export default function IncomePage() {
   async function onSubmit(e) {
     e.preventDefault()
     if (total <= 0) {
-      setStatus({ type: 'error', message: 'Enter Kalash and/or Mummy amount.' })
+      setStatus({ type: 'error', message: 'Enter at least one amount.' })
       return
     }
     setSaving(true)
     setStatus(null)
     try {
-      const data = await addIncome({ date, kalash, mummy, source })
+      const data = await addIncome({ date, you, partner, source })
       const verb = data.updated ? 'Updated' : 'Saved'
       setStatus({
         type: 'ok',
-        message: data.demo ? `Demo · ${formatINR(total)}` : `${verb} · ${formatINR(data.total ?? total)}`,
+        message: `${verb} · ${formatINR(data.total ?? total)}`,
       })
     } catch (err) {
       setStatus({ type: 'error', message: err.message || 'Save failed' })
@@ -74,7 +73,7 @@ export default function IncomePage() {
     <div className="page fade-in">
       <header className="page-head">
         <h1>{editing ? 'Edit income' : 'Add income'}</h1>
-        <p className="lede">Pick a date — existing data loads automatically.</p>
+        <p className="lede">Salary, rent, gifts — pick a date and fill what applies.</p>
       </header>
 
       <form className="form" onSubmit={onSubmit}>
@@ -86,26 +85,26 @@ export default function IncomePage() {
         />
 
         <div className={`cat-grid ${loadingEntry ? 'is-dim' : ''}`}>
-          <Field label="Kalash">
+          <Field label="You">
             <input
               type="number"
               inputMode="decimal"
               min="0"
               placeholder="—"
-              value={kalash}
+              value={you}
               disabled={busy}
-              onChange={(e) => setKalash(e.target.value)}
+              onChange={(e) => setYou(e.target.value)}
             />
           </Field>
-          <Field label="Mummy">
+          <Field label="Partner / other">
             <input
               type="number"
               inputMode="decimal"
               min="0"
               placeholder="—"
-              value={mummy}
+              value={partner}
               disabled={busy}
-              onChange={(e) => setMummy(e.target.value)}
+              onChange={(e) => setPartner(e.target.value)}
             />
           </Field>
         </div>
@@ -116,7 +115,7 @@ export default function IncomePage() {
             value={source}
             disabled={busy}
             onChange={(e) => setSource(e.target.value)}
-            placeholder="Salary, rent…"
+            placeholder="Salary, rent, freelance…"
           />
         </Field>
 
@@ -128,14 +127,11 @@ export default function IncomePage() {
         <StatusBanner status={status} />
 
         <button className="btn primary" type="submit" disabled={busy}>
-          {saving ? 'Please wait…' : editing ? 'Update income' : 'Confirm'}
+          {saving ? 'Please wait…' : editing ? 'Update income' : 'Save income'}
         </button>
       </form>
 
-      <SavingOverlay
-        show={saving}
-        label={editing ? 'Updating income…' : 'Saving income…'}
-      />
+      <SavingOverlay show={saving} label={editing ? 'Updating income…' : 'Saving income…'} />
     </div>
   )
 }

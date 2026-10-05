@@ -93,7 +93,7 @@ export default function ExpensePage() {
     <div className="page fade-in">
       <header className="page-head">
         <h1>{editing ? 'Edit spend' : 'Add spend'}</h1>
-        <p className="lede">Pick a date — existing data loads automatically.</p>
+        <p className="lede">Tap a category, save once — it lands in your Google Sheet.</p>
       </header>
 
       <form className="form" onSubmit={onSubmit}>

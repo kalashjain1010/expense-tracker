@@ -1,3 +1,5 @@
+import { invalidateAfterWrite } from './queryCache'
+
 const API_BASE = (import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8787').replace(/\/$/, '')
 
 async function api(path, options = {}) {
@@ -41,15 +43,64 @@ export async function fetchEntry(type, date) {
 }
 
 export async function addExpense(payload) {
-  return api('/api/expense', { method: 'POST', body: JSON.stringify(payload) })
+  const data = await api('/api/expense', { method: 'POST', body: JSON.stringify(payload) })
+  invalidateAfterWrite({
+    type: 'expense',
+    date: payload.date,
+    entryPatch: {
+      found: true,
+      type: 'expense',
+      date: payload.date,
+      row: data.row,
+      count: 1,
+      total: data.total,
+      categories: payload.categories,
+      note: payload.note || '',
+    },
+  })
+  return data
 }
 
 export async function addIncome(payload) {
-  return api('/api/income', { method: 'POST', body: JSON.stringify(payload) })
+  const data = await api('/api/income', { method: 'POST', body: JSON.stringify(payload) })
+  invalidateAfterWrite({
+    type: 'income',
+    date: payload.date,
+    entryPatch: {
+      found: true,
+      type: 'income',
+      date: payload.date,
+      row: data.row,
+      count: 1,
+      total: data.total,
+      you: payload.you,
+      partner: payload.partner,
+      source: payload.source || '',
+    },
+  })
+  return data
 }
 
 export async function addCreditCard(payload) {
-  return api('/api/credit', { method: 'POST', body: JSON.stringify(payload) })
+  const data = await api('/api/credit', { method: 'POST', body: JSON.stringify(payload) })
+  invalidateAfterWrite({
+    type: 'credit',
+    date: payload.date,
+    entryPatch: {
+      found: true,
+      type: 'credit',
+      date: payload.date,
+      row: data.row,
+      count: 1,
+      total: payload.total,
+      items: payload.items || '',
+    },
+  })
+  return data
+}
+
+export async function polishSheet() {
+  return api('/api/sheet/style', { method: 'POST' })
 }
 
 export function isConfigured() {

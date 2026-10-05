@@ -194,17 +194,103 @@ textarea {
   flex-shrink: 0;
 }
 
-.sheet-link {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--green-deep);
-  padding: 0.35rem 0.55rem;
-  border-radius: 8px;
-  background: var(--green-soft);
+.login-card {
+  align-items: stretch;
+  text-align: center;
 }
 
-.sheet-link:hover {
-  background: rgba(26, 92, 69, 0.14);
+.login-card .lock-title,
+.login-card .lock-sub,
+.login-card > svg {
+  align-self: center;
+}
+
+.login-points {
+  list-style: none;
+  margin: 0.35rem 0 1rem;
+  padding: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.login-points li {
+  position: relative;
+  padding: 0.55rem 0.7rem 0.55rem 2rem;
+  border-radius: 10px;
+  background: var(--green-soft);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--green-deep);
+  font-weight: 600;
+}
+
+.login-points li::before {
+  content: '';
+  position: absolute;
+  left: 0.7rem;
+  top: 0.85rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+.login-foot {
+  margin-top: 0.85rem !important;
+}
+
+.welcome-banner {
+  background: linear-gradient(135deg, #123d2f 0%, #1a5c45 60%, #2d7a5c 100%);
+  color: #eef7f2;
+  border-radius: var(--radius);
+  padding: 1.1rem 1rem 1.15rem;
+  margin-bottom: 0.85rem;
+  box-shadow: var(--shadow);
+  animation: fadeUp 0.4s var(--ease) both;
+}
+
+.welcome-kicker {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.75;
+  font-weight: 700;
+}
+
+.welcome-banner h2 {
+  margin: 0.25rem 0 0.35rem;
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 1.25rem;
+  color: #fff;
+}
+
+.welcome-banner p {
+  margin: 0;
+  font-size: 0.84rem;
+  opacity: 0.88;
+  line-height: 1.4;
+}
+
+.welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+.welcome-actions .btn.primary {
+  background: #fff;
+  color: var(--green-deep);
+  box-shadow: none;
+}
+
+.welcome-actions .btn.ghost {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.25);
 }
 
 .lock-toggle {

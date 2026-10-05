@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Bar,
   BarChart,
@@ -12,6 +13,7 @@ import {
 import MonthDetail from '../components/MonthDetail'
 import { DashboardSkeleton } from '../components/Skeleton'
 import { useSummary } from '../hooks/useKharchaData'
+import { useAuth } from '../lib/auth'
 import {
   allMonthKeys,
   CATEGORY_LABELS,
@@ -37,6 +39,7 @@ function useChartTrigger() {
 }
 
 export default function Dashboard() {
+  const { user } = useAuth()
   const { data, error, loading, refreshing, refetch } = useSummary()
   const [scope, setScope] = useState('mtd')
   const [monthIndex, setMonthIndex] = useState(null)
@@ -109,8 +112,30 @@ export default function Dashboard() {
     (monthPickOptions.find((m) => m.month === thisMonthKey) || monthPickOptions[0] || {})?.month ||
     ''
 
+  const isEmpty =
+    !(data.byMonth || []).some((m) => m.spend || m.income || m.credit) &&
+    !(data.recent || []).length
+
   return (
     <div className="page fade-in">
+      {isEmpty ? (
+        <section className="welcome-banner">
+          <p className="welcome-kicker">You’re in</p>
+          <h2>Start with today’s spend</h2>
+          <p>Your Google Sheet is ready. Log a few expenses — Home fills itself.</p>
+          <div className="welcome-actions">
+            <Link className="btn primary" to="/expense">
+              Add spend
+            </Link>
+            {user?.spreadsheetUrl ? (
+              <a className="btn ghost" href={user.spreadsheetUrl} target="_blank" rel="noreferrer">
+                Open sheet
+              </a>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
       <section className="hero-block">
         <div className="hero-top">
           <p className="hero-kicker">This month</p>

@@ -1,8 +1,15 @@
 import { google } from 'googleapis'
 
-export const SHEET_EXPENSE = 'daily Kharcha'
+export const SHEET_EXPENSE = 'Spend'
 export const SHEET_INCOME = 'Income'
-export const SHEET_CC = 'Credit card spends'
+export const SHEET_CC = 'Card'
+
+/** Legacy tab names from earlier builds */
+const SHEET_ALIASES = {
+  [SHEET_EXPENSE]: ['Spend', 'daily Kharcha'],
+  [SHEET_INCOME]: ['Income'],
+  [SHEET_CC]: ['Card', 'Credit card spends'],
+}
 
 export const EXPENSE_CATEGORIES = [
   'Food',
@@ -18,12 +25,27 @@ export const EXPENSE_CATEGORIES = [
 export const EXPENSE_HEADERS = [
   'Date',
   'Total Amount',
-  ...EXPENSE_CATEGORIES,
+  'Food',
+  'Groceries',
+  'Investments',
+  'Wants',
+  'Travel',
+  'Needs',
+  'Rent & utils',
+  'Others',
   'Note',
 ]
 
-export const INCOME_HEADERS = ['Date', 'Kalash', 'Mummy', 'Total', 'Source']
-export const CC_HEADERS = ['Date', 'Total', 'Items']
+export const INCOME_HEADERS = ['Date', 'You', 'Partner', 'Total', 'Source']
+export const CC_HEADERS = ['Date', 'Total', 'Items / note']
+
+const HEADER_BG = { red: 0.059, green: 0.318, blue: 0.196 } // #0f5132
+const HEADER_FG = { red: 1, green: 1, blue: 1 }
+const TAB_COLORS = {
+  [SHEET_EXPENSE]: { red: 0.102, green: 0.361, blue: 0.271 },
+  [SHEET_INCOME]: { red: 0.18, green: 0.45, blue: 0.35 },
+  [SHEET_CC]: { red: 0.55, green: 0.4, blue: 0.2 },
+}
 
 function sheetsApi(auth) {
   return google.sheets({ version: 'v4', auth })
@@ -82,8 +104,23 @@ function coerceDate(v) {
   return null
 }
 
-async function readSheetValues(auth, spreadsheetId, sheetName) {
+async function resolveSheetName(auth, spreadsheetId, preferred) {
   const sheets = sheetsApi(auth)
+  const meta = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: 'sheets.properties.title',
+  })
+  const titles = new Set((meta.data.sheets || []).map((s) => s.properties.title))
+  const aliases = SHEET_ALIASES[preferred] || [preferred]
+  for (const name of aliases) {
+    if (titles.has(name)) return name
+  }
+  return preferred
+}
+
+async function readSheetValues(auth, spreadsheetId, preferredName) {
+  const sheets = sheetsApi(auth)
+  const sheetName = await resolveSheetName(auth, spreadsheetId, preferredName)
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId,
     range: `'${sheetName}'`,
@@ -93,8 +130,9 @@ async function readSheetValues(auth, spreadsheetId, sheetName) {
   return res.data.values || []
 }
 
-async function writeRow(auth, spreadsheetId, sheetName, rowIndex1Based, values) {
+async function writeRow(auth, spreadsheetId, preferredName, rowIndex1Based, values) {
   const sheets = sheetsApi(auth)
+  const sheetName = await resolveSheetName(auth, spreadsheetId, preferredName)
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `'${sheetName}'!A${rowIndex1Based}`,
@@ -103,8 +141,9 @@ async function writeRow(auth, spreadsheetId, sheetName, rowIndex1Based, values) 
   })
 }
 
-async function appendRow(auth, spreadsheetId, sheetName, values) {
+async function appendRow(auth, spreadsheetId, preferredName, values) {
   const sheets = sheetsApi(auth)
+  const sheetName = await resolveSheetName(auth, spreadsheetId, preferredName)
   const res = await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: `'${sheetName}'!A1`,
@@ -117,15 +156,143 @@ async function appendRow(auth, spreadsheetId, sheetName, values) {
   return m ? Number(m[1]) : null
 }
 
+/** Apply polished header + column layout to an existing spreadsheet (idempotent). */
+export async function styleSpreadsheet(auth, spreadsheetId) {
+  const sheets = sheetsApi(auth)
+  const meta = await sheets.spreadsheets.get({
+    spreadsheetId,
+    fields: 'sheets.properties(sheetId,title)',
+  })
+  const byTitle = Object.fromEntries(
+    (meta.data.sheets || []).map((s) => [s.properties.title, s.properties.sheetId]),
+  )
+
+  const specs = [
+    {
+      preferred: SHEET_EXPENSE,
+      headers: EXPENSE_HEADERS,
+      widths: [110, 120, 90, 100, 110, 90, 90, 90, 110, 90, 180],
+      currencyCols: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+    },
+    {
+      preferred: SHEET_INCOME,
+      headers: INCOME_HEADERS,
+      widths: [110, 110, 110, 110, 200],
+      currencyCols: [1, 2, 3],
+    },
+    {
+      preferred: SHEET_CC,
+      headers: CC_HEADERS,
+      widths: [110, 120, 280],
+      currencyCols: [1],
+    },
+  ]
+
+  const requests = []
+  const valueData = []
+
+  for (const spec of specs) {
+    const title =
+      (SHEET_ALIASES[spec.preferred] || [spec.preferred]).find((t) => byTitle[t] != null) ||
+      spec.preferred
+    const sheetId = byTitle[title]
+    if (sheetId == null) continue
+
+    valueData.push({ range: `'${title}'!A1`, values: [spec.headers] })
+
+    requests.push({
+      updateSheetProperties: {
+        properties: {
+          sheetId,
+          title: spec.preferred,
+          tabColor: TAB_COLORS[spec.preferred],
+          gridProperties: { frozenRowCount: 1 },
+        },
+        fields: 'title,tabColor,gridProperties.frozenRowCount',
+      },
+    })
+
+    requests.push({
+      repeatCell: {
+        range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: spec.headers.length },
+        cell: {
+          userEnteredFormat: {
+            backgroundColor: HEADER_BG,
+            textFormat: { foregroundColor: HEADER_FG, bold: true, fontFamily: 'Arial', fontSize: 10 },
+            horizontalAlignment: 'LEFT',
+            verticalAlignment: 'MIDDLE',
+          },
+        },
+        fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment,verticalAlignment)',
+      },
+    })
+
+    requests.push({
+      updateDimensionProperties: {
+        range: { sheetId, dimension: 'ROWS', startIndex: 0, endIndex: 1 },
+        properties: { pixelSize: 32 },
+        fields: 'pixelSize',
+      },
+    })
+
+    spec.widths.forEach((px, i) => {
+      requests.push({
+        updateDimensionProperties: {
+          range: { sheetId, dimension: 'COLUMNS', startIndex: i, endIndex: i + 1 },
+          properties: { pixelSize: px },
+          fields: 'pixelSize',
+        },
+      })
+    })
+
+    for (const col of spec.currencyCols) {
+      requests.push({
+        repeatCell: {
+          range: {
+            sheetId,
+            startRowIndex: 1,
+            startColumnIndex: col,
+            endColumnIndex: col + 1,
+          },
+          cell: {
+            userEnteredFormat: {
+              numberFormat: { type: 'CURRENCY', pattern: '₹#,##0.00' },
+            },
+          },
+          fields: 'userEnteredFormat.numberFormat',
+        },
+      })
+    }
+  }
+
+  if (valueData.length) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId,
+      requestBody: { valueInputOption: 'USER_ENTERED', data: valueData },
+    })
+  }
+  if (requests.length) {
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId,
+      requestBody: { requests },
+    })
+  }
+  return { ok: true }
+}
+
 export async function createBlankKharchaSpreadsheet(auth, title = 'Kharcha') {
   const sheets = sheetsApi(auth)
   const created = await sheets.spreadsheets.create({
     requestBody: {
-      properties: { title },
+      properties: {
+        title,
+        locale: 'en_IN',
+        timeZone: 'Asia/Kolkata',
+      },
       sheets: [
-        { properties: { title: SHEET_EXPENSE } },
-        { properties: { title: SHEET_INCOME } },
-        { properties: { title: SHEET_CC } },
+        { properties: { title: SHEET_EXPENSE, tabColor: TAB_COLORS[SHEET_EXPENSE] } },
+        { properties: { title: SHEET_INCOME, tabColor: TAB_COLORS[SHEET_INCOME] } },
+        { properties: { title: SHEET_CC, tabColor: TAB_COLORS[SHEET_CC] } },
       ],
     },
   })
@@ -133,7 +300,6 @@ export async function createBlankKharchaSpreadsheet(auth, title = 'Kharcha') {
   const spreadsheetId = created.data.spreadsheetId
   const spreadsheetUrl = created.data.spreadsheetUrl
 
-  // Remove default Sheet1 if present
   const meta = await sheets.spreadsheets.get({ spreadsheetId })
   const extra = (meta.data.sheets || []).filter(
     (s) => ![SHEET_EXPENSE, SHEET_INCOME, SHEET_CC].includes(s.properties.title),
@@ -147,18 +313,7 @@ export async function createBlankKharchaSpreadsheet(auth, title = 'Kharcha') {
     })
   }
 
-  await sheets.spreadsheets.values.batchUpdate({
-    spreadsheetId,
-    requestBody: {
-      valueInputOption: 'USER_ENTERED',
-      data: [
-        { range: `'${SHEET_EXPENSE}'!A1`, values: [EXPENSE_HEADERS] },
-        { range: `'${SHEET_INCOME}'!A1`, values: [INCOME_HEADERS] },
-        { range: `'${SHEET_CC}'!A1`, values: [CC_HEADERS] },
-      ],
-    },
-  })
-
+  await styleSpreadsheet(auth, spreadsheetId)
   return { spreadsheetId, spreadsheetUrl }
 }
 
@@ -176,6 +331,11 @@ export async function copyTemplateSpreadsheet(auth, templateId, title = 'Kharcha
 
 export async function ensureUserSpreadsheet(auth, user) {
   if (user?.spreadsheet_id) {
+    try {
+      await styleSpreadsheet(auth, user.spreadsheet_id)
+    } catch (err) {
+      console.warn('styleSpreadsheet skipped:', err.message)
+    }
     return {
       spreadsheetId: user.spreadsheet_id,
       spreadsheetUrl: user.spreadsheet_url || `https://docs.google.com/spreadsheets/d/${user.spreadsheet_id}/edit`,
@@ -183,7 +343,13 @@ export async function ensureUserSpreadsheet(auth, user) {
   }
   const templateId = process.env.TEMPLATE_SPREADSHEET_ID
   if (templateId) {
-    return copyTemplateSpreadsheet(auth, templateId)
+    const copied = await copyTemplateSpreadsheet(auth, templateId)
+    try {
+      await styleSpreadsheet(auth, copied.spreadsheetId)
+    } catch (err) {
+      console.warn('styleSpreadsheet skipped:', err.message)
+    }
+    return copied
   }
   return createBlankKharchaSpreadsheet(auth)
 }
@@ -235,6 +401,8 @@ export async function getEntry(auth, spreadsheetId, type, dateIso) {
       date: dateIso,
       row: found.row,
       count: found.count,
+      you: num(r[1]),
+      partner: num(r[2]),
       kalash: num(r[1]),
       mummy: num(r[2]),
       total: num(r[3]),
@@ -282,10 +450,10 @@ export async function addExpense(auth, spreadsheetId, payload) {
 export async function addIncome(auth, spreadsheetId, payload) {
   const dateObj = parseISODate(payload.date)
   if (toISODate(dateObj) > toISODate(new Date())) throw new Error('Future dates are not allowed')
-  const kalash = num(payload.kalash)
-  const mummy = num(payload.mummy)
-  const total = kalash + mummy
-  const values = [payload.date, blankOrNum(kalash), blankOrNum(mummy), total || '', payload.source || '']
+  const you = num(payload.you ?? payload.kalash)
+  const partner = num(payload.partner ?? payload.mummy)
+  const total = you + partner
+  const values = [payload.date, blankOrNum(you), blankOrNum(partner), total || '', payload.source || '']
   const rows = await readSheetValues(auth, spreadsheetId, SHEET_INCOME)
   const found = findLastRowForDate(rows, dateObj)
   let row
