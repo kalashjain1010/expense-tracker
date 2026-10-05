@@ -542,11 +542,21 @@ textarea {
   box-shadow: none;
 }
 
+.welcome-actions .btn.primary:hover:not(:disabled) {
+  background: #e8f0eb;
+  color: var(--green-deep);
+}
+
 .welcome-actions .btn.ghost {
   background: rgba(255, 255, 255, 0.12);
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.25);
   margin: 0;
+}
+
+.welcome-actions .btn.ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
 }
 
 .lock-toggle {
