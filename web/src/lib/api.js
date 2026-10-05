@@ -1,7 +1,12 @@
 import { invalidateAfterWrite } from './queryCache'
 
-// Same-origin by default (Vercel). Local: set VITE_API_BASE=http://127.0.0.1:8787 in web/.env
-const API_BASE = String(import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
+// Local: web/.env sets VITE_API_BASE=http://127.0.0.1:8787
+// Production: always same-origin (never ship localhost into the bundle)
+const rawBase = String(import.meta.env.VITE_API_BASE ?? '').replace(/\/$/, '')
+const API_BASE =
+  import.meta.env.PROD && /^(https?:\/\/)?(localhost|127\.0\.0\.1)(:\d+)?$/i.test(rawBase)
+    ? ''
+    : rawBase
 
 async function api(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
