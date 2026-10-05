@@ -206,6 +206,9 @@ textarea {
 .sheet-link:hover {
   background: rgba(26, 92, 69, 0.14);
 }
+
+.lock-toggle {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 36px;
