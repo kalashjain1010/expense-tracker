@@ -160,8 +160,15 @@ function monthTotalFormula(year, monthIndex0) {
   const startM = monthIndex0 + 1
   const endY = monthIndex0 === 11 ? year + 1 : year
   const endM = monthIndex0 === 11 ? 1 : monthIndex0 + 2
+  const criteria = `A:A,">="&DATE(${year},${startM},1),A:A,"<"&DATE(${endY},${endM},1)`
+  // Sum category cols C–J (not B:B) — formula lives in B, so B:B would be circular → #ERROR!
   // Sheets API formulaValue must NOT include leading '='
-  return `SUMIFS(B:B,A:A,">="&DATE(${year},${startM},1),A:A,"<"&DATE(${endY},${endM},1))`
+  return ['C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'].map((col) => `SUMIFS(${col}:${col},${criteria})`).join('+')
+}
+
+function monthBannerLabelFormula(year, monthIndex0) {
+  // TEXT formula keeps "October 2026" as text (plain stringValue often becomes a date)
+  return `TEXT(DATE(${year},${monthIndex0 + 1},1),"MMMM YYYY")`
 }
 
 function isBannerLabel(v) {
@@ -260,11 +267,11 @@ async function formatDataRow(auth, spreadsheetId, sheetId, row1Based, currencyEn
   })
 }
 
-/** Write month banner as TEXT label + formula (never USER_ENTERED — that turns "October 2026" into a date). */
+/** Write month banner as TEXT formula label + category SUMIFS (never USER_ENTERED). */
 async function writeBannerRow(auth, spreadsheetId, sheetId, row1Based, year, monthIndex0) {
   const sheets = sheetsApi(auth)
-  const label = monthLabel(new Date(year, monthIndex0, 1))
   const formula = monthTotalFormula(year, monthIndex0)
+  const labelFormula = monthBannerLabelFormula(year, monthIndex0)
   const r = row1Based - 1
   const empty = { userEnteredValue: { stringValue: '' } }
   await sheets.spreadsheets.batchUpdate({
@@ -285,7 +292,7 @@ async function writeBannerRow(auth, spreadsheetId, sheetId, row1Based, year, mon
               {
                 values: [
                   {
-                    userEnteredValue: { stringValue: label },
+                    userEnteredValue: { formulaValue: labelFormula },
                     userEnteredFormat: {
                       numberFormat: { type: 'TEXT' },
                       textFormat: {
@@ -521,19 +528,20 @@ export async function styleSpreadsheet(auth, spreadsheetId) {
     {
       preferred: SHEET_EXPENSE,
       headers: EXPENSE_HEADERS,
-      widths: [120, 120, 90, 100, 110, 90, 90, 90, 110, 90, 180],
+      // Date a bit wider; Note as wide as practical for long notes
+      widths: [155, 120, 90, 100, 110, 90, 90, 90, 110, 90, 520],
       cols: 11,
     },
     {
       preferred: SHEET_INCOME,
       headers: INCOME_HEADERS,
-      widths: [120, 110, 110, 110, 200],
+      widths: [155, 110, 110, 110, 280],
       cols: 5,
     },
     {
       preferred: SHEET_CC,
       headers: CC_HEADERS,
-      widths: [120, 120, 280],
+      widths: [155, 120, 520],
       cols: 3,
     },
   ]

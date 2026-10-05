@@ -112,7 +112,8 @@ app.get('/api/me', async (req, res) => {
 
   try {
     req.user = user
-    const sheet = await recoverSpreadsheetIfNeeded(req, { polish: false })
+    // Restyle on session load so column widths / banners stay healthy (incl. after formula fixes)
+    const sheet = await recoverSpreadsheetIfNeeded(req, { polish: true })
     res.json({
       ok: true,
       data: {
