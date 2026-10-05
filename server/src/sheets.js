@@ -280,7 +280,7 @@ export async function styleSpreadsheet(auth, spreadsheetId) {
   return { ok: true }
 }
 
-export async function createBlankKharchaSpreadsheet(auth, title = 'Kharcha') {
+export async function createBlankKharchaSpreadsheet(auth, title = 'Expense Tracker') {
   const sheets = sheetsApi(auth)
   const created = await sheets.spreadsheets.create({
     requestBody: {
@@ -317,7 +317,7 @@ export async function createBlankKharchaSpreadsheet(auth, title = 'Kharcha') {
   return { spreadsheetId, spreadsheetUrl }
 }
 
-export async function copyTemplateSpreadsheet(auth, templateId, title = 'Kharcha') {
+export async function copyTemplateSpreadsheet(auth, templateId, title = 'Expense Tracker') {
   const drive = driveApi(auth)
   const copied = await drive.files.copy({
     fileId: templateId,

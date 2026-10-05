@@ -73,12 +73,12 @@ export default function AppShell() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <Link to="/" className="brand-link" aria-label="Kharcha home">
+        <Link to="/" className="brand-link" aria-label="Expense Tracker home">
           <span className="brand-logo-wrap">
             <KharchaLogo size={38} className="brand-logo" />
           </span>
           <span className="brand-wrap">
-            <span className="brand">Kharcha</span>
+            <span className="brand">Expense Tracker</span>
             <span className="brand-sub">Your sheet · your money</span>
           </span>
         </Link>

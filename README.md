@@ -1,4 +1,4 @@
-# Kharcha
+# Expense Tracker
 
 Personal money tracker. **Your Google Sheet, your data.**
 
@@ -13,9 +13,7 @@ Sign in with Google → we create a polished spreadsheet in **your** Drive → l
 
 ## Local setup
 
-See [README setup](#local-setup-steps) below. For production: **[DEPLOY.md](DEPLOY.md)**.
-
-### Local setup steps
+See steps below. For production: **[DEPLOY.md](DEPLOY.md)**.
 
 1. Google Cloud project → enable **Sheets API** + **Drive API**
 2. OAuth consent (Testing) → add yourself as test user

@@ -1,4 +1,4 @@
-# Deploy Kharcha
+# Deploy Expense Tracker
 
 The app has two parts:
 - **web/** → Vercel (frontend)
@@ -6,7 +6,7 @@ The app has two parts:
 
 ## 1. Deploy the API (Railway example — free tier)
 
-1. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub → pick `kharcha-app`
+1. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub → pick `expense-tracker`
 2. Set **Root Directory** to `server`
 3. Add variables:
 
@@ -19,11 +19,11 @@ GOOGLE_CLIENT_SECRET=...
 GOOGLE_REDIRECT_URI=https://YOUR-RAILWAY-DOMAIN.up.railway.app/auth/google/callback
 ```
 
-4. Deploy → copy the public API URL (e.g. `https://kharcha-api.up.railway.app`)
+4. Deploy → copy the public API URL (e.g. `https://expense-tracker-api.up.railway.app`)
 
 ## 2. Deploy the web app (Vercel)
 
-1. [vercel.com](https://vercel.com) → Add New Project → import `kharcha-app`
+1. [vercel.com](https://vercel.com) → Add New Project → import `expense-tracker`
 2. **Root Directory:** `web`
 3. Framework: Vite (auto)
 4. Environment variable:
@@ -60,13 +60,11 @@ While status is **Testing**, only emails on **Test users** can sign in.
 OAuth consent screen → Test users → add each email (up to 100).
 
 ### Option B — public (anyone with Google)
-1. OAuth consent screen → add a **Privacy Policy URL** (required)
+1. OAuth consent screen → App name: **Expense Tracker** → add a **Privacy Policy URL**
 2. Confirm scopes: Drive File + Spreadsheets + profile/email
 3. Click **Publish app**
-4. For Drive/Sheets scopes Google usually asks for **verification** (privacy policy, demo video, sometimes a review). Until verified, users see “unverified app” and can still continue via Advanced → Go to App (limited).
+4. For Drive/Sheets scopes Google usually asks for **verification**. Until verified, users see “unverified app” and can continue via Advanced → Go to App.
 5. After verification, anyone can sign in with Google.
-
-**Privacy policy tip:** host a simple page that says you store Google id/email/tokens/spreadsheet id only, money data stays in the user’s Drive, and they can revoke access anytime.
 
 ## Checklist
 

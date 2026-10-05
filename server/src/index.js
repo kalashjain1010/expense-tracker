@@ -143,7 +143,7 @@ app.post('/api/sheet/style', requireUser, (req, res) =>
 )
 
 app.listen(PORT, () => {
-  console.log(`Kharcha API on http://127.0.0.1:${PORT}`)
+  console.log(`Expense Tracker API on http://127.0.0.1:${PORT}`)
   if (!oauthConfigured()) {
     console.warn('Google OAuth not configured yet — fill server/.env from .env.example')
   }

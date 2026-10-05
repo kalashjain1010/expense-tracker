@@ -9,9 +9,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'Kharcha',
-        short_name: 'Kharcha',
-        description: 'Track daily expenses, income, and credit card spends',
+        name: 'Expense Tracker',
+        short_name: 'Expense Tracker',
+        description: 'Track daily expenses, income, and credit card spends in your Google Sheet',
         theme_color: '#1a5c45',
         background_color: '#f4f6f3',
         display: 'standalone',

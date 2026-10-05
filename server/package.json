@@ -1,5 +1,5 @@
 {
-  "name": "kharcha-api",
+  "name": "expense-tracker-api",
   "private": true,
   "version": "0.1.0",
   "type": "module",

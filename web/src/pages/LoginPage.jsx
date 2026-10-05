@@ -16,7 +16,7 @@ export default function LoginPage() {
     <div className="lock-screen">
       <div className="lock-card login-card">
         <KharchaLogo size={56} />
-        <h1 className="lock-title">Kharcha</h1>
+        <h1 className="lock-title">Expense Tracker</h1>
         <p className="lock-sub">Money tracking that lives in your Google Sheet</p>
 
         <ul className="login-points">
