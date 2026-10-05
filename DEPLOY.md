@@ -1,76 +1,90 @@
-# Deploy Expense Tracker
+# Deploy Expense Tracker — free forever (Vercel + Turso)
 
-The app has two parts:
-- **web/** → Vercel (frontend)
-- **server/** → a small always-on host (Railway / Render / Fly) — Google OAuth needs a real backend
+One Vercel project serves the **web UI + API** on the same domain (cookies just work).  
+Sessions/user pointers live in **Turso** (free SQLite-compatible cloud DB). Money stays in each user’s Google Sheet.
 
-## 1. Deploy the API (Railway example — free tier)
+## 1. Create a free Turso database
 
-1. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub → pick `expense-tracker`
-2. Set **Root Directory** to `server`
-3. Add variables:
+1. Sign up at [turso.tech](https://turso.tech) (GitHub login) — Free plan, no card  
+2. CLI (or dashboard → Create Database):
+
+```bash
+# optional CLI
+curl -sSfL https://get.tur.so/install.sh | bash
+turso auth login
+turso db create expense-tracker
+turso db show expense-tracker --url
+turso db tokens create expense-tracker
+```
+
+3. Copy:
+   - `TURSO_DATABASE_URL` → `libsql://expense-tracker-….turso.io`
+   - `TURSO_AUTH_TOKEN` → the token
+
+## 2. Deploy on Vercel (one project)
+
+1. [vercel.com](https://vercel.com) → **Add New Project** → import `expense-tracker`  
+2. **Root Directory:** leave as repo root (`.`) — do **not** set `web`  
+3. Framework: Other / Vite (build comes from `vercel.json`)  
+4. **Environment variables** (Production):
 
 ```
-PORT=8787
-APP_ORIGIN=https://YOUR-VERCEL-DOMAIN.vercel.app
+APP_ORIGIN=https://YOUR-PROJECT.vercel.app
 SESSION_SECRET=long-random-string
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-GOOGLE_REDIRECT_URI=https://YOUR-RAILWAY-DOMAIN.up.railway.app/auth/google/callback
+GOOGLE_CLIENT_ID=…
+GOOGLE_CLIENT_SECRET=…
+GOOGLE_REDIRECT_URI=https://YOUR-PROJECT.vercel.app/auth/google/callback
+TURSO_DATABASE_URL=libsql://….turso.io
+TURSO_AUTH_TOKEN=…
+VITE_API_BASE=
 ```
 
-4. Deploy → copy the public API URL (e.g. `https://expense-tracker-api.up.railway.app`)
+Leave `VITE_API_BASE` **empty** so the browser calls the same domain (`/api`, `/auth`).
 
-## 2. Deploy the web app (Vercel)
+5. Deploy → open `https://YOUR-PROJECT.vercel.app/health` → `{"ok":true,"oauth":true}`
 
-1. [vercel.com](https://vercel.com) → Add New Project → import `expense-tracker`
-2. **Root Directory:** `web`
-3. Framework: Vite (auto)
-4. Environment variable:
+## 3. Google OAuth
 
+Cloud Console → Credentials → OAuth Web client:
+
+**Authorized JavaScript origins**
 ```
-VITE_API_BASE=https://YOUR-RAILWAY-DOMAIN.up.railway.app
-```
-
-5. Deploy → copy the Vercel URL
-
-## 3. Update Google OAuth for production
-
-In Google Cloud → **Credentials** → your OAuth Web client:
-
-**Authorised JavaScript origins**
-```
-https://YOUR-VERCEL-DOMAIN.vercel.app
+https://YOUR-PROJECT.vercel.app
 ```
 
-**Authorised redirect URIs**
+**Authorized redirect URIs**
 ```
-https://YOUR-RAILWAY-DOMAIN.up.railway.app/auth/google/callback
+https://YOUR-PROJECT.vercel.app/auth/google/callback
 ```
 
-(Keep the local `127.0.0.1` URIs too if you still develop locally.)
+(Keep local `http://127.0.0.1:5173` / `http://127.0.0.1:8787/...` for development.)
 
-Also set Railway `APP_ORIGIN` to the exact Vercel URL (no trailing slash).
+## 4. Local development (unchanged)
 
-## 4. Open the app for any Google user
+```bash
+cp server/.env.example server/.env
+cp web/.env.example web/.env
+# fill Google keys; leave TURSO_* empty → uses local file DB
+npm run install:all
+npm run dev
+```
 
-While status is **Testing**, only emails on **Test users** can sign in.
+- App: http://127.0.0.1:5173  
+- API: http://127.0.0.1:8787  
 
-### Option A — stay in Testing (friends / beta)
-OAuth consent screen → Test users → add each email (up to 100).
+## 5. Open for any Google user
 
-### Option B — public (anyone with Google)
-1. OAuth consent screen → App name: **Expense Tracker** → add a **Privacy Policy URL**
-2. Confirm scopes: Drive File + Spreadsheets + profile/email
-3. Click **Publish app**
-4. For Drive/Sheets scopes Google usually asks for **verification**. Until verified, users see “unverified app” and can continue via Advanced → Go to App.
-5. After verification, anyone can sign in with Google.
+OAuth consent **Testing** = only Test users.  
+**Publish app** (+ privacy policy URL) when you want anyone to sign in. Sheets scopes may show “unverified” until Google verifies.
+
+## Why not Railway?
+
+Railway’s free trial is short; always-on needs ~$5/mo. This stack stays on free tiers (Vercel Hobby + Turso Free) within normal personal-use quotas.
 
 ## Checklist
 
-- [ ] Sheets API + Drive API enabled
-- [ ] API deployed with env vars
-- [ ] Vercel `VITE_API_BASE` points at API
-- [ ] Google redirect URI matches API `/auth/google/callback`
-- [ ] `APP_ORIGIN` matches Vercel URL
-- [ ] Test users added **or** app published
+- [ ] Turso DB + token  
+- [ ] Vercel env vars set (empty `VITE_API_BASE`)  
+- [ ] `/health` ok  
+- [ ] Google redirect = `https://….vercel.app/auth/google/callback`  
+- [ ] Sign in once → sheet appears in Drive  

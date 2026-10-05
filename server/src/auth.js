@@ -1,4 +1,5 @@
 import { google } from 'googleapis'
+import { nanoid } from 'nanoid'
 import {
   createSession,
   getUser,
@@ -6,7 +7,6 @@ import {
   upsertUser,
 } from './db.js'
 import { ensureUserSpreadsheet } from './sheets.js'
-import { nanoid } from 'nanoid'
 
 const SCOPES = [
   'openid',
@@ -49,13 +49,13 @@ export async function handleOAuthCallback(code) {
     throw new Error('Google profile missing id/email')
   }
 
-  const existing = getUser(profile.id)
+  const existing = await getUser(profile.id)
   const refreshToken = tokens.refresh_token || existing?.refresh_token
   if (!refreshToken) {
     throw new Error('No refresh token from Google. Revoke app access and sign in again.')
   }
 
-  upsertUser({
+  await upsertUser({
     google_id: profile.id,
     email: profile.email,
     name: profile.name || '',
@@ -66,16 +66,17 @@ export async function handleOAuthCallback(code) {
   })
 
   client.setCredentials({ refresh_token: refreshToken })
-  const sheet = await ensureUserSpreadsheet(client, getUser(profile.id), { polish: true })
+  // Skip heavy polish on login (Vercel serverless time limit) — chrome runs later
+  const sheet = await ensureUserSpreadsheet(client, await getUser(profile.id), { polish: false })
   if (sheet?.spreadsheetId) {
-    setUserSpreadsheet(profile.id, sheet.spreadsheetId, sheet.spreadsheetUrl)
+    await setUserSpreadsheet(profile.id, sheet.spreadsheetId, sheet.spreadsheetUrl)
   }
 
   const sessionId = nanoid(32)
   const expires = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30).toISOString()
-  createSession(sessionId, profile.id, expires)
+  await createSession(sessionId, profile.id, expires)
 
-  const user = getUser(profile.id)
+  const user = await getUser(profile.id)
   return { sessionId, user }
 }
 

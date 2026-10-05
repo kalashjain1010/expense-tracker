@@ -711,8 +711,10 @@ export async function styleSpreadsheet(auth, spreadsheetId) {
 /**
  * Light layout pass: column widths + center/left alignment.
  * One metadata read + one batchUpdate — safe to run without blowing quota.
+ * @param {{ repairBanners?: boolean }} [opts]
  */
-export async function applySheetChrome(auth, spreadsheetId) {
+export async function applySheetChrome(auth, spreadsheetId, opts = {}) {
+  const repairBanners = opts.repairBanners !== false
   const sheets = sheetsApi(auth)
   const metaSheets = await getSheetMeta(auth, spreadsheetId)
   const byTitle = Object.fromEntries(metaSheets.map((s) => [s.properties.title, s.properties.sheetId]))
@@ -869,8 +871,9 @@ export async function applySheetChrome(auth, spreadsheetId) {
     })
   }
 
-  // Ensure month banners sum Total Amount (col B) so manual sheet edits stay live
-  await repairBannerFormulas(auth, spreadsheetId)
+  if (repairBanners) {
+    await repairBannerFormulas(auth, spreadsheetId)
+  }
   return { ok: true }
 }
 
@@ -986,7 +989,15 @@ export async function createBlankKharchaSpreadsheet(auth, title = 'Expense Track
     })
   }
 
-  await styleSpreadsheet(auth, spreadsheetId)
+  // Light first paint (serverless-friendly); full polish can run later via applySheetChrome
+  await applySheetChrome(auth, spreadsheetId, { repairBanners: false })
+  const sheetName = SHEET_EXPENSE
+  const meta2 = await getSheetMeta(auth, spreadsheetId)
+  const spendId = meta2.find((s) => s.properties.title === sheetName)?.properties.sheetId
+  if (spendId != null) {
+    const now = new Date()
+    await writeBannerRow(auth, spreadsheetId, spendId, 4, now.getFullYear(), now.getMonth(), sheetName)
+  }
   return { spreadsheetId, spreadsheetUrl }
 }
 

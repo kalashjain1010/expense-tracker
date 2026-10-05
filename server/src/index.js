@@ -28,6 +28,7 @@ const app = express()
 const PORT = Number(process.env.PORT || 8787)
 const ORIGIN = process.env.APP_ORIGIN || 'http://127.0.0.1:5173'
 const COOKIE = 'kharcha_session'
+const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL)
 
 /** googleId -> layout version last applied (avoid Sheets quota from restyling every request) */
 const layoutApplied = new Map()
@@ -52,19 +53,23 @@ function publicUser(row) {
   }
 }
 
-function requireUser(req, res, next) {
-  const sid = req.signedCookies?.[COOKIE] || req.cookies?.[COOKIE]
-  if (!sid) return res.status(401).json({ ok: false, error: 'Not signed in' })
-  const user = getSession(sid)
-  if (!user) return res.status(401).json({ ok: false, error: 'Session expired' })
-  req.sessionId = sid
-  req.user = user
-  next()
+async function requireUser(req, res, next) {
+  try {
+    const sid = req.signedCookies?.[COOKIE] || req.cookies?.[COOKIE]
+    if (!sid) return res.status(401).json({ ok: false, error: 'Not signed in' })
+    const user = await getSession(sid)
+    if (!user) return res.status(401).json({ ok: false, error: 'Session expired' })
+    req.sessionId = sid
+    req.user = user
+    next()
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ ok: false, error: 'Session error' })
+  }
 }
 
 /** If Drive file was deleted, create a fresh empty sheet and remember it. */
 async function recoverSpreadsheetIfNeeded(req, { polish = false, checkExists = false } = {}) {
-  // Already have a sheet id — skip existence probe unless asked (saves read quota)
   if (req.user.spreadsheet_id && !polish && !checkExists) {
     return {
       spreadsheetId: req.user.spreadsheet_id,
@@ -75,7 +80,7 @@ async function recoverSpreadsheetIfNeeded(req, { polish = false, checkExists = f
   const auth = authedClientForUser(req.user)
   const sheet = await ensureUserSpreadsheet(auth, req.user, { polish, checkExists })
   if (sheet.recreated || sheet.spreadsheetId !== req.user.spreadsheet_id) {
-    setUserSpreadsheet(req.user.google_id, sheet.spreadsheetId, sheet.spreadsheetUrl)
+    await setUserSpreadsheet(req.user.google_id, sheet.spreadsheetId, sheet.spreadsheetUrl)
     req.user.spreadsheet_id = sheet.spreadsheetId
     req.user.spreadsheet_url = sheet.spreadsheetUrl
     layoutApplied.delete(req.user.google_id)
@@ -89,14 +94,13 @@ async function maybeApplySheetChrome(req) {
   const id = req.user.google_id
   const state = layoutApplied.get(id)
   if (state === SHEET_LAYOUT_VERSION) return
-  if (typeof state === 'number' && state > Date.now()) return // quota backoff
+  if (typeof state === 'number' && state > Date.now()) return
   try {
     const auth = authedClientForUser(req.user)
     await applySheetChrome(auth, req.user.spreadsheet_id)
     layoutApplied.set(id, SHEET_LAYOUT_VERSION)
   } catch (err) {
     if (isQuotaError(err)) {
-      // Don't retry chrome for 2 minutes — keeps Home/entry reads working
       layoutApplied.set(id, Date.now() + 2 * 60 * 1000)
       console.warn('applySheetChrome deferred (quota):', err.message)
       return
@@ -126,7 +130,7 @@ app.get('/auth/google/callback', async (req, res) => {
       httpOnly: true,
       signed: true,
       sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      secure: isProd,
       maxAge: 1000 * 60 * 60 * 24 * 30,
     })
     res.redirect(`${ORIGIN}/`)
@@ -136,8 +140,8 @@ app.get('/auth/google/callback', async (req, res) => {
   }
 })
 
-app.post('/auth/logout', requireUser, (req, res) => {
-  deleteSession(req.sessionId)
+app.post('/auth/logout', requireUser, async (req, res) => {
+  await deleteSession(req.sessionId)
   res.clearCookie(COOKIE)
   res.json({ ok: true })
 })
@@ -145,17 +149,20 @@ app.post('/auth/logout', requireUser, (req, res) => {
 app.get('/api/me', async (req, res) => {
   const sid = req.signedCookies?.[COOKIE] || req.cookies?.[COOKIE]
   if (!sid) return res.json({ ok: true, data: { user: null } })
-  const user = getSession(sid)
-  if (!user) return res.json({ ok: true, data: { user: null } })
-  // No Sheets API here — restyling on every load blew the read quota
-  res.json({ ok: true, data: { user: publicUser(user) } })
+  try {
+    const user = await getSession(sid)
+    if (!user) return res.json({ ok: true, data: { user: null } })
+    res.json({ ok: true, data: { user: publicUser(user) } })
+  } catch (err) {
+    console.error(err)
+    res.json({ ok: true, data: { user: null } })
+  }
 })
 
 async function withSheets(req, res, fn) {
   try {
     await recoverSpreadsheetIfNeeded(req, { checkExists: false })
     if (!req.user.spreadsheet_id) {
-      // First-time user — create sheet once
       await recoverSpreadsheetIfNeeded(req, { polish: true, checkExists: false })
     }
     if (!req.user.spreadsheet_id) {
@@ -163,7 +170,6 @@ async function withSheets(req, res, fn) {
     }
     const auth = authedClientForUser(req.user)
     try {
-      // Read/write first — never block Home/entry behind layout chrome (quota)
       const data = await fn(auth, req.user.spreadsheet_id, req.body || {})
       maybeApplySheetChrome(req).catch((err) => console.warn('chrome:', err.message))
       return res.json({ ok: true, data })
@@ -177,7 +183,7 @@ async function withSheets(req, res, fn) {
       if (!isSpreadsheetMissingError(err)) throw err
       const auth2 = authedClientForUser(req.user)
       const created = await ensureUserSpreadsheet(auth2, { ...req.user, spreadsheet_id: null })
-      setUserSpreadsheet(req.user.google_id, created.spreadsheetId, created.spreadsheetUrl)
+      await setUserSpreadsheet(req.user.google_id, created.spreadsheetId, created.spreadsheetUrl)
       req.user.spreadsheet_id = created.spreadsheetId
       req.user.spreadsheet_url = created.spreadsheetUrl
       layoutApplied.delete(req.user.google_id)
@@ -227,9 +233,14 @@ app.post('/api/sheet/style', requireUser, (req, res) =>
   withSheets(req, res, (auth, id) => styleSpreadsheet(auth, id)),
 )
 
-app.listen(PORT, () => {
-  console.log(`Expense Tracker API on http://127.0.0.1:${PORT}`)
-  if (!oauthConfigured()) {
-    console.warn('Google OAuth not configured yet — fill server/.env from .env.example')
-  }
-})
+export default app
+
+/** Local / Railway-style listen — skipped on Vercel serverless */
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Expense Tracker API on http://127.0.0.1:${PORT}`)
+    if (!oauthConfigured()) {
+      console.warn('Google OAuth not configured yet — fill server/.env from .env.example')
+    }
+  })
+}

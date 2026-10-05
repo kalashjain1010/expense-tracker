@@ -1,6 +1,11 @@
 import { invalidateAfterWrite } from './queryCache'
 
-const API_BASE = (import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8787').replace(/\/$/, '')
+// Empty string = same origin (Vercel). Local default hits the Express API.
+const API_BASE = (
+  import.meta.env.VITE_API_BASE !== undefined && import.meta.env.VITE_API_BASE !== null
+    ? String(import.meta.env.VITE_API_BASE)
+    : 'http://127.0.0.1:8787'
+).replace(/\/$/, '')
 
 async function api(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {

@@ -34,7 +34,8 @@ npm run dev
 ## Stack
 
 - `web/` — React + Vite PWA
-- `server/` — Express + Google OAuth + Sheets API + SQLite (session pointers only)
+- `server/` — Express + Google OAuth + Sheets API + Turso/libsql (session pointers only)
+- Production: **Vercel** (UI + API, same domain) + free **Turso** DB — see [DEPLOY.md](DEPLOY.md)
 
 ## Privacy
 
