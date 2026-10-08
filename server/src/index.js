@@ -37,10 +37,37 @@ import {
 
 const app = express()
 const PORT = Number(process.env.PORT || 8787)
-const ORIGIN = process.env.APP_ORIGIN || 'http://127.0.0.1:5173'
+const ORIGIN = (process.env.APP_ORIGIN || 'http://127.0.0.1:5173').replace(/\/$/, '')
 const COOKIE = 'kharcha_session'
 const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-secret'
 const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL)
+
+/** Prefer the request host so the session cookie and post-login redirect stay same-origin. */
+function publicOrigin(req) {
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '')
+    .split(',')[0]
+    .trim()
+  if (host) {
+    const proto = String(req.headers['x-forwarded-proto'] || (isProd ? 'https' : 'http'))
+      .split(',')[0]
+      .trim()
+    return `${proto}://${host}`
+  }
+  return ORIGIN
+}
+
+function sessionCookieOptions() {
+  return {
+    httpOnly: true,
+    // Opaque DB session ids — signing is unnecessary and breaks on Vercel when
+    // the platform pre-parses cookies (cookie-parser skips unsigning).
+    signed: false,
+    sameSite: 'lax',
+    secure: isProd,
+    path: '/',
+    maxAge: 1000 * 60 * 60 * 24 * 30,
+  }
+}
 
 /** googleId -> layout version last applied (avoid Sheets quota from restyling every request) */
 const layoutApplied = new Map()
@@ -52,9 +79,13 @@ app.use(
   }),
 )
 app.use(express.json({ limit: '1mb' }))
+// Vercel may pre-populate req.cookies; clear so cookie-parser always runs.
+app.use((req, _res, next) => {
+  delete req.cookies
+  delete req.signedCookies
+  next()
+})
 app.use(cookieParser(SESSION_SECRET))
-// Vercel may pre-populate req.cookies; cookie-parser then skips and never sets req.secret,
-// which breaks res.cookie({ signed: true }) with "cookieParser(\"secret\") required".
 app.use((req, _res, next) => {
   req.secret = SESSION_SECRET
   next()
@@ -99,11 +130,36 @@ function pinMatches(pin, stored) {
   return false
 }
 
+function readSessionCookie(req) {
+  let raw = req.signedCookies?.[COOKIE] || req.cookies?.[COOKIE] || null
+  if (!raw && req.headers.cookie) {
+    for (const part of String(req.headers.cookie).split(';')) {
+      const [key, ...rest] = part.trim().split('=')
+      if (key === COOKIE) {
+        try {
+          raw = decodeURIComponent(rest.join('='))
+        } catch {
+          raw = rest.join('=')
+        }
+        break
+      }
+    }
+  }
+  if (!raw || typeof raw !== 'string') return null
+  // Legacy signed cookies look like "s:<id>.<sig>" — recover the id if present.
+  if (raw.startsWith('s:')) {
+    const body = raw.slice(2)
+    const dot = body.lastIndexOf('.')
+    if (dot > 0) return body.slice(0, dot)
+  }
+  return raw
+}
+
 function sessionIdFromRequest(req) {
   const auth = req.headers.authorization || ''
   const m = /^Bearer\s+(.+)$/i.exec(auth)
   if (m?.[1]) return m[1].trim()
-  return req.signedCookies?.[COOKIE] || req.cookies?.[COOKIE] || null
+  return readSessionCookie(req)
 }
 
 async function requireUser(req, res, next) {
@@ -175,21 +231,16 @@ app.get('/auth/google', (_req, res) => {
 })
 
 app.get('/auth/google/callback', async (req, res) => {
+  const origin = publicOrigin(req)
   try {
     const code = req.query.code
     if (!code) throw new Error('Missing code')
     const { sessionId } = await handleOAuthCallback(String(code))
-    res.cookie(COOKIE, sessionId, {
-      httpOnly: true,
-      signed: true,
-      sameSite: 'lax',
-      secure: isProd,
-      maxAge: 1000 * 60 * 60 * 24 * 30,
-    })
-    res.redirect(`${ORIGIN}/`)
+    res.cookie(COOKIE, sessionId, sessionCookieOptions())
+    res.redirect(`${origin}/`)
   } catch (err) {
     console.error(err)
-    res.redirect(`${ORIGIN}/login?error=${encodeURIComponent(err.message || 'Auth failed')}`)
+    res.redirect(`${origin}/login?error=${encodeURIComponent(err.message || 'Auth failed')}`)
   }
 })
 
@@ -221,30 +272,25 @@ app.get('/auth/google/mobile/callback', async (req, res) => {
   }
 })
 
-/** Mobile WebView: exchange Bearer session token for signed cookie, then open full web UI */
+/** Mobile WebView: exchange Bearer session token for cookie, then open full web UI */
 app.get('/auth/mobile/enter', async (req, res) => {
+  const origin = publicOrigin(req)
   try {
     const token = String(req.query.token || '').trim()
-    if (!token) return res.redirect(`${ORIGIN}/?error=${encodeURIComponent('Missing session')}`)
+    if (!token) return res.redirect(`${origin}/?error=${encodeURIComponent('Missing session')}`)
     const user = await getSession(token)
-    if (!user) return res.redirect(`${ORIGIN}/?error=${encodeURIComponent('Session expired')}`)
-    res.cookie(COOKIE, token, {
-      httpOnly: true,
-      signed: true,
-      sameSite: 'lax',
-      secure: isProd,
-      maxAge: 1000 * 60 * 60 * 24 * 30,
-    })
-    res.redirect(`${ORIGIN}/`)
+    if (!user) return res.redirect(`${origin}/?error=${encodeURIComponent('Session expired')}`)
+    res.cookie(COOKIE, token, sessionCookieOptions())
+    res.redirect(`${origin}/`)
   } catch (err) {
     console.error(err)
-    res.redirect(`${ORIGIN}/?error=${encodeURIComponent(err.message || 'Auth failed')}`)
+    res.redirect(`${origin}/?error=${encodeURIComponent(err.message || 'Auth failed')}`)
   }
 })
 
 app.post('/auth/logout', requireUser, async (req, res) => {
   await deleteSession(req.sessionId)
-  res.clearCookie(COOKIE)
+  res.clearCookie(COOKIE, { path: '/', secure: isProd, sameSite: 'lax' })
   res.json({ ok: true })
 })
 
