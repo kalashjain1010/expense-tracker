@@ -97,6 +97,22 @@ function toISODate(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+/** Calendar "today" in India — avoids UTC server rejecting same-day IST spends. */
+function todayISOInIndia() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date())
+}
+
+function assertNotFutureDate(iso) {
+  const day = String(iso || '').slice(0, 10)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('Invalid date')
+  if (day > todayISOInIndia()) throw new Error('Future dates are not allowed')
+}
+
 function num(v) {
   if (v === '' || v == null) return 0
   if (typeof v === 'number' && Number.isFinite(v)) return v
@@ -1172,7 +1188,7 @@ export async function getEntry(auth, spreadsheetId, type, dateIso) {
 
 export async function addExpense(auth, spreadsheetId, payload) {
   const dateObj = parseISODate(payload.date)
-  if (toISODate(dateObj) > toISODate(new Date())) throw new Error('Future dates are not allowed')
+  assertNotFutureDate(payload.date)
 
   await ensureMonthBanner(auth, spreadsheetId, dateObj)
 
@@ -1208,7 +1224,7 @@ export async function addExpense(auth, spreadsheetId, payload) {
 
 export async function addIncome(auth, spreadsheetId, payload) {
   const dateObj = parseISODate(payload.date)
-  if (toISODate(dateObj) > toISODate(new Date())) throw new Error('Future dates are not allowed')
+  assertNotFutureDate(payload.date)
   const you = num(payload.you ?? payload.kalash)
   const partner = num(payload.partner ?? payload.mummy)
   const total = you + partner
@@ -1240,7 +1256,7 @@ export async function addIncome(auth, spreadsheetId, payload) {
 
 export async function addCreditCard(auth, spreadsheetId, payload) {
   const dateObj = parseISODate(payload.date)
-  if (toISODate(dateObj) > toISODate(new Date())) throw new Error('Future dates are not allowed')
+  assertNotFutureDate(payload.date)
   const total = num(payload.total)
   const values = [
     `=DATE(${dateObj.getFullYear()},${dateObj.getMonth() + 1},${dateObj.getDate()})`,

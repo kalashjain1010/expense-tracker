@@ -42,12 +42,13 @@ export function createOAuthClient(redirectUri) {
   )
 }
 
-export function getAuthUrl(redirectUri) {
+export function getAuthUrl(redirectUri, state) {
   const client = createOAuthClient(redirectUri)
   return client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     scope: SCOPES,
+    ...(state ? { state } : {}),
   })
 }
 
@@ -63,6 +64,49 @@ export function mobileOAuthRedirectUri() {
     return `${origin.replace(/\/$/, '')}/auth/google/mobile/callback`
   }
   return resolveRedirectUri()
+}
+
+/** Where the mobile OAuth flow sends the user after Google (deep link or local web). */
+export function resolveMobileAppReturnTo(returnTo) {
+  const fallback = mobileAppRedirectBase().split('?')[0]
+  if (!returnTo || typeof returnTo !== 'string') return fallback
+  try {
+    const u = new URL(returnTo)
+    if (u.protocol === 'expensetracker:' && u.hostname === 'auth' && u.pathname === '/callback') {
+      return 'expensetracker://auth/callback'
+    }
+    if (
+      u.protocol === 'http:' &&
+      (u.hostname === 'localhost' || u.hostname === '127.0.0.1')
+    ) {
+      const path = u.pathname === '/' ? '' : u.pathname
+      return `${u.origin}${path}`
+    }
+  } catch {
+    /* ignore */
+  }
+  return fallback
+}
+
+export function encodeMobileOAuthState(appReturnTo) {
+  return Buffer.from(JSON.stringify({ r: appReturnTo }), 'utf8').toString('base64url')
+}
+
+export function decodeMobileOAuthState(state) {
+  if (!state) return null
+  try {
+    const parsed = JSON.parse(Buffer.from(String(state), 'base64url').toString('utf8'))
+    if (parsed?.r) return resolveMobileAppReturnTo(parsed.r)
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+export function mobileOAuthReturnUrl(base, query) {
+  const qs = new URLSearchParams(query).toString()
+  if (!qs) return base
+  return base.includes('?') ? `${base}&${qs}` : `${base}?${qs}`
 }
 
 export async function handleOAuthCallback(code, redirectUri) {
