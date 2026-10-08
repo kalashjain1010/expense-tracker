@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { fetchMe, loginUrl, logout as apiLogout, polishSheet } from './api'
-import { clearPinSession } from './pinLock'
+import { cachePinUser, clearPinSession } from './pinLock'
 import { clearAllCaches } from './queryCache'
 
 const AuthContext = createContext({
@@ -19,6 +19,7 @@ export function AuthProvider({ children }) {
     try {
       const data = await fetchMe()
       setUser(data.user || null)
+      if (data.user) cachePinUser(data.user)
       if (data.user?.spreadsheetId && !sessionStorage.getItem('expense_sheet_styled_v2')) {
         polishSheet()
           .then(() => sessionStorage.setItem('expense_sheet_styled_v2', '1'))

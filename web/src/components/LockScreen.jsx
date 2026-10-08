@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { verifyPin } from '../lib/api'
-import { useAutoFocusPin } from '../hooks/useAutoFocusPin'
+import { focusPinInput, useAutoFocusPin } from '../hooks/useAutoFocusPin'
 import { markUnlocked } from '../lib/pinLock'
 import KharchaLogo from './KharchaLogo'
 
@@ -30,7 +30,7 @@ export default function LockScreen({ userId, onUnlock }) {
       setError(err.message || 'Wrong PIN')
       setPin('')
       window.setTimeout(() => setShake(false), 420)
-      inputRef.current?.focus()
+      focusPinInput(inputRef.current)
     } finally {
       setBusy(false)
     }
@@ -55,7 +55,10 @@ export default function LockScreen({ userId, onUnlock }) {
   }
 
   return (
-    <div className="lock-screen">
+    <div
+      className="lock-screen"
+      onPointerDownCapture={() => focusPinInput(inputRef.current)}
+    >
       <form
         className={`lock-card ${shake ? 'is-shake' : ''}`}
         onSubmit={submit}

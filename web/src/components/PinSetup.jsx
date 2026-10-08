@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { setPin as apiSetPin } from '../lib/api'
-import { useAutoFocusPin } from '../hooks/useAutoFocusPin'
+import { focusPinInput, useAutoFocusPin } from '../hooks/useAutoFocusPin'
 import { markUnlocked, skipPinSetup } from '../lib/pinLock'
 import KharchaLogo from './KharchaLogo'
 
@@ -82,7 +82,10 @@ export default function PinSetup({ userId, onDone }) {
   const value = step === 'enter' ? pin : confirm
 
   return (
-    <div className="lock-screen">
+    <div
+      className="lock-screen"
+      onPointerDownCapture={() => focusPinInput(inputRef.current)}
+    >
       <form className="lock-card" onSubmit={submit} autoComplete="off">
         <KharchaLogo size={56} />
         <h1 className="lock-title">App PIN</h1>

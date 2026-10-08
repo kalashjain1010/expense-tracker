@@ -9,21 +9,30 @@ import ExpensePage from './pages/ExpensePage'
 import IncomePage from './pages/IncomePage'
 import LoginPage from './pages/LoginPage'
 import { AuthProvider, useAuth } from './lib/auth'
-import { didSkipPinSetup, isUnlocked } from './lib/pinLock'
+import { cachePinUser, didSkipPinSetup, getCachedPinUser, isUnlocked } from './lib/pinLock'
+
+function initialGate() {
+  const cached = getCachedPinUser()
+  if (cached?.hasPin && cached.id && !isUnlocked(cached.id)) return 'lock'
+  return 'loading'
+}
 
 function Guard({ children }) {
   const { user, loading, refresh } = useAuth()
-  const [gate, setGate] = useState('loading') // loading | setup | lock | open
+  const [gate, setGate] = useState(initialGate) // loading | setup | lock | open
+  const cached = getCachedPinUser()
 
   useEffect(() => {
-    if (loading) {
-      setGate('loading')
-      return
-    }
+    // Keep showing the lock screen while /api/me loads — do not flash "Checking session…".
+    if (loading) return
+
     if (!user) {
       setGate('open')
       return
     }
+
+    cachePinUser(user)
+
     if (user.hasPin) {
       setGate(isUnlocked(user.id) ? 'open' : 'lock')
       return
@@ -37,11 +46,18 @@ function Guard({ children }) {
 
   useEffect(() => {
     const onLock = () => {
-      if (user?.hasPin) setGate('lock')
+      if (user?.hasPin || getCachedPinUser()?.hasPin) setGate('lock')
     }
     window.addEventListener('expense-pin-lock', onLock)
     return () => window.removeEventListener('expense-pin-lock', onLock)
   }, [user?.hasPin])
+
+  if (gate === 'lock') {
+    const userId = user?.id || cached?.id
+    if (userId) {
+      return <LockScreen userId={userId} onUnlock={() => setGate('open')} />
+    }
+  }
 
   if (loading || gate === 'loading') {
     return (
@@ -65,10 +81,6 @@ function Guard({ children }) {
         }}
       />
     )
-  }
-
-  if (gate === 'lock') {
-    return <LockScreen userId={user.id} onUnlock={() => setGate('open')} />
   }
 
   return children
