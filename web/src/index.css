@@ -1157,7 +1157,7 @@ textarea {
 .chart-insight {
   position: relative;
   margin-top: 0.55rem;
-  min-height: 5.75rem;
+  min-height: 4.75rem;
 }
 
 .chart-insight-cat {
@@ -1184,24 +1184,21 @@ textarea {
 }
 
 .chart-insight .chart-detail {
-  padding: 0.55rem 0.7rem 0.6rem;
+  padding: 0.7rem 0.8rem;
   border-radius: 12px;
   background: var(--green-soft);
   opacity: 0;
   transform: translateY(6px);
-  overflow: hidden;
 }
 
 .chart-insight.has-selection .chart-insight-hint {
   opacity: 0;
   transform: translateY(-4px);
-  pointer-events: none;
 }
 
 .chart-insight.has-selection .chart-detail {
   opacity: 1;
   transform: translateY(0);
-  pointer-events: auto;
 }
 
 .chart-detail strong {
@@ -1213,23 +1210,26 @@ textarea {
 .chart-detail-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.65rem 1rem;
+  align-items: baseline;
+  gap: 0.45rem 1.25rem;
   font-size: 0.72rem;
   color: var(--muted);
 }
 
 .chart-detail-grid span {
-  min-width: 4.5rem;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .chart-detail-grid b {
-  display: block;
+  display: inline;
   color: var(--ink);
   font-size: 0.82rem;
-  margin-top: 0.1rem;
+  font-variant-numeric: tabular-nums;
   transition: color 0.2s ease;
-  white-space: nowrap;
 }
 
 .month-pick-row {
