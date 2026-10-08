@@ -697,6 +697,9 @@ textarea {
   text-align: center;
   font-size: 1.15rem;
   font-weight: 650;
+  /* type=tel + numeric keypad; mask digits like a password field */
+  -webkit-text-security: disc;
+  text-security: disc;
 }
 
 .lock-skip {

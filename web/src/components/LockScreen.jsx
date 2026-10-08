@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { verifyPin } from '../lib/api'
+import { useAutoFocusPin } from '../hooks/useAutoFocusPin'
 import { markUnlocked } from '../lib/pinLock'
 import KharchaLogo from './KharchaLogo'
 
@@ -12,9 +13,7 @@ export default function LockScreen({ userId, onUnlock }) {
   const [busy, setBusy] = useState(false)
   const inputRef = useRef(null)
 
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [])
+  useAutoFocusPin(inputRef, [])
 
   async function attempt(nextPin) {
     const value = String(nextPin ?? '').trim()
@@ -73,10 +72,11 @@ export default function LockScreen({ userId, onUnlock }) {
           ref={inputRef}
           id="expense-pin"
           className="lock-input"
-          type="password"
+          type="tel"
           inputMode="numeric"
           pattern="[0-9]*"
           autoComplete="one-time-code"
+          autoFocus
           enterKeyHint="done"
           value={pin}
           onChange={onChange}

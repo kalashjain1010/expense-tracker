@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { setPin as apiSetPin } from '../lib/api'
+import { useAutoFocusPin } from '../hooks/useAutoFocusPin'
 import { markUnlocked, skipPinSetup } from '../lib/pinLock'
 import KharchaLogo from './KharchaLogo'
 
@@ -14,9 +15,7 @@ export default function PinSetup({ userId, onDone }) {
   const [busy, setBusy] = useState(false)
   const inputRef = useRef(null)
 
-  useEffect(() => {
-    inputRef.current?.focus()
-  }, [step])
+  useAutoFocusPin(inputRef, [step])
 
   function onChange(e) {
     const digits = e.target.value.replace(/\D/g, '').slice(0, PIN_LEN)
@@ -100,10 +99,11 @@ export default function PinSetup({ userId, onDone }) {
           ref={inputRef}
           id="expense-pin-setup"
           className="lock-input"
-          type="password"
+          type="tel"
           inputMode="numeric"
           pattern="[0-9]*"
-          autoComplete="new-password"
+          autoComplete="one-time-code"
+          autoFocus
           enterKeyHint="done"
           value={value}
           onChange={onChange}
