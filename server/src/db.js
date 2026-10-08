@@ -36,6 +36,7 @@ async function ensureSchema() {
         refresh_token TEXT NOT NULL,
         spreadsheet_id TEXT,
         spreadsheet_url TEXT,
+        pin_hash TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
@@ -46,6 +47,12 @@ async function ensureSchema() {
         expires_at TEXT NOT NULL
       );
     `)
+    // Existing DBs created before pin_hash — add column if missing
+    try {
+      await client.execute('ALTER TABLE users ADD COLUMN pin_hash TEXT')
+    } catch {
+      /* column already exists */
+    }
   })()
   return ready
 }
@@ -114,6 +121,28 @@ export async function setUserSpreadsheet(googleId, spreadsheetId, spreadsheetUrl
     WHERE google_id = ?
   `,
     [spreadsheetId, spreadsheetUrl, googleId],
+  )
+}
+
+export async function setUserPinHash(googleId, pinHash) {
+  await run(
+    `
+    UPDATE users
+    SET pin_hash = ?, updated_at = datetime('now')
+    WHERE google_id = ?
+  `,
+    [pinHash, googleId],
+  )
+}
+
+export async function clearUserPin(googleId) {
+  await run(
+    `
+    UPDATE users
+    SET pin_hash = NULL, updated_at = datetime('now')
+    WHERE google_id = ?
+  `,
+    [googleId],
   )
 }
 

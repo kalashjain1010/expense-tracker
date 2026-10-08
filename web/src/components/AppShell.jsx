@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { prefetchTodayEntries } from '../hooks/useKharchaData'
 import { useAuth } from '../lib/auth'
+import { lockApp } from '../lib/pinLock'
 import { getTheme, toggleTheme } from '../lib/theme'
 import ConfirmDialog from './ConfirmDialog'
 import KharchaLogo from './KharchaLogo'
 import OfflineBanner from './OfflineBanner'
+import PinSetup from './PinSetup'
 
 function IconHome({ active }) {
   return (
@@ -76,10 +78,11 @@ const links = [
 ]
 
 export default function AppShell() {
-  const { user, logout } = useAuth()
+  const { user, logout, refresh } = useAuth()
   const [confirmOut, setConfirmOut] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const [theme, setThemeState] = useState(() => getTheme())
+  const [showPinSetup, setShowPinSetup] = useState(false)
 
   useEffect(() => {
     prefetchTodayEntries()
@@ -97,6 +100,18 @@ export default function AppShell() {
 
   function handleTheme() {
     setThemeState(toggleTheme())
+  }
+
+  if (showPinSetup && user && !user.hasPin) {
+    return (
+      <PinSetup
+        userId={user.id}
+        onDone={async ({ hasPin }) => {
+          setShowPinSetup(false)
+          if (hasPin) await refresh()
+        }}
+      />
+    )
   }
 
   return (
@@ -124,6 +139,44 @@ export default function AppShell() {
               <span>Sheet</span>
             </a>
           ) : null}
+          {user?.hasPin ? (
+            <button
+              type="button"
+              className="lock-toggle"
+              onClick={() => lockApp(user.id)}
+              aria-label="Lock app"
+              title="Lock"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.8" />
+                <path
+                  d="M8 11V8a4 4 0 0 1 8 0v3"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="lock-toggle"
+              onClick={() => setShowPinSetup(true)}
+              aria-label="Set app PIN"
+              title="Set PIN"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.8" />
+                <path
+                  d="M8 11V8a4 4 0 0 1 8 0v3"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeDasharray="3 2"
+                />
+              </svg>
+            </button>
+          )}
           <button
             type="button"
             className="lock-toggle"

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { fetchMe, loginUrl, logout as apiLogout, polishSheet } from './api'
+import { clearPinSession } from './pinLock'
 import { clearAllCaches } from './queryCache'
 
 const AuthContext = createContext({
@@ -39,12 +40,14 @@ export function AuthProvider({ children }) {
   }
 
   async function logout() {
+    const uid = user?.id
     try {
       await apiLogout()
     } catch {
       /* ignore */
     }
     clearAllCaches()
+    if (uid) clearPinSession(uid)
     try {
       const keys = []
       for (let i = 0; i < sessionStorage.length; i++) {
@@ -66,6 +69,11 @@ export function AuthProvider({ children }) {
       /* ignore */
     }
     setUser(null)
+    try {
+      window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'logout' }))
+    } catch {
+      /* ignore */
+    }
   }
 
   return (

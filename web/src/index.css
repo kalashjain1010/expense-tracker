@@ -691,11 +691,18 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 0.85rem 0.95rem;
-  background: #fafbfa;
+  background: var(--bg);
+  color: var(--ink);
   letter-spacing: 0.28em;
   text-align: center;
   font-size: 1.15rem;
   font-weight: 650;
+}
+
+.lock-skip {
+  margin-top: 0.35rem;
+  color: var(--muted) !important;
+  background: transparent !important;
 }
 
 .lock-input:focus {

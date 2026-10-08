@@ -1,4 +1,5 @@
 import 'dotenv/config'
+import bcrypt from 'bcryptjs'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import express from 'express'
@@ -14,7 +15,7 @@ import {
   oauthConfigured,
   resolveMobileAppReturnTo,
 } from './auth.js'
-import { deleteSession, getSession, setUserSpreadsheet } from './db.js'
+import { clearUserPin, deleteSession, getSession, setUserPinHash, setUserSpreadsheet } from './db.js'
 import {
   mergeImportIntoEntry,
   suggestCategoryWithAi,
@@ -55,12 +56,20 @@ app.use(cookieParser(process.env.SESSION_SECRET || 'dev-secret'))
 function publicUser(row) {
   if (!row) return null
   return {
+    id: row.google_id,
     email: row.email,
     name: row.name,
     picture: row.picture,
     spreadsheetId: row.spreadsheet_id,
     spreadsheetUrl: row.spreadsheet_url,
+    hasPin: Boolean(row.pin_hash),
   }
+}
+
+function normalizePin(raw) {
+  const pin = String(raw ?? '').trim()
+  if (!/^\d{6}$/.test(pin)) return null
+  return pin
 }
 
 function sessionIdFromRequest(req) {
@@ -222,6 +231,53 @@ app.get('/api/me', async (req, res) => {
   } catch (err) {
     console.error(err)
     res.json({ ok: true, data: { user: null } })
+  }
+})
+
+/** Set or replace the optional 6-digit app PIN (stored hashed in users.pin_hash). */
+app.post('/api/pin', requireUser, async (req, res) => {
+  try {
+    const pin = normalizePin(req.body?.pin)
+    if (!pin) return res.status(400).json({ ok: false, error: 'PIN must be exactly 6 digits' })
+    const hash = await bcrypt.hash(pin, 10)
+    await setUserPinHash(req.user.google_id, hash)
+    res.json({ ok: true, data: { hasPin: true } })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ ok: false, error: 'Could not save PIN' })
+  }
+})
+
+/** Verify PIN for unlock. */
+app.post('/api/pin/verify', requireUser, async (req, res) => {
+  try {
+    const pin = normalizePin(req.body?.pin)
+    if (!pin) return res.status(400).json({ ok: false, error: 'PIN must be exactly 6 digits' })
+    const hash = req.user.pin_hash
+    if (!hash) return res.status(400).json({ ok: false, error: 'No PIN set' })
+    const match = await bcrypt.compare(pin, hash)
+    if (!match) return res.status(401).json({ ok: false, error: 'Wrong PIN' })
+    res.json({ ok: true, data: { ok: true } })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ ok: false, error: 'Could not verify PIN' })
+  }
+})
+
+/** Remove PIN — requires current PIN. */
+app.delete('/api/pin', requireUser, async (req, res) => {
+  try {
+    const pin = normalizePin(req.body?.pin)
+    if (!pin) return res.status(400).json({ ok: false, error: 'Current PIN required' })
+    const hash = req.user.pin_hash
+    if (!hash) return res.json({ ok: true, data: { hasPin: false } })
+    const match = await bcrypt.compare(pin, hash)
+    if (!match) return res.status(401).json({ ok: false, error: 'Wrong PIN' })
+    await clearUserPin(req.user.google_id)
+    res.json({ ok: true, data: { hasPin: false } })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ ok: false, error: 'Could not clear PIN' })
   }
 })
 

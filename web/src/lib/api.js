@@ -46,6 +46,18 @@ export async function logout() {
   return api('/auth/logout', { method: 'POST' })
 }
 
+export async function setPin(pin) {
+  return api('/api/pin', { method: 'POST', body: JSON.stringify({ pin }) })
+}
+
+export async function verifyPin(pin) {
+  return api('/api/pin/verify', { method: 'POST', body: JSON.stringify({ pin }) })
+}
+
+export async function clearPin(pin) {
+  return api('/api/pin', { method: 'DELETE', body: JSON.stringify({ pin }) })
+}
+
 export async function fetchSummary() {
   return api('/api/summary')
 }
