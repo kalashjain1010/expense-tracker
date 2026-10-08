@@ -56,7 +56,7 @@ export default function MonthDetail({ month, onClose }) {
       </div>
 
       <div className="month-detail-actions">
-        <Link className="btn primary" to={addPath}>
+        <Link className="btn primary" to={addPath} replace>
           {addLabel}
         </Link>
         {user?.spreadsheetUrl ? (

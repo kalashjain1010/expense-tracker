@@ -12,6 +12,7 @@ import {
 } from 'recharts'
 import MonthDetail from '../components/MonthDetail'
 import { DashboardSkeleton } from '../components/Skeleton'
+import { useHistoryBackClose } from '../hooks/useHistoryBackClose'
 import { useSummary } from '../hooks/useKharchaData'
 import { useAuth } from '../lib/auth'
 import {
@@ -49,6 +50,7 @@ export default function Dashboard() {
   const [noteQuery, setNoteQuery] = useState('')
   const trigger = useChartTrigger()
   const canHover = trigger === 'hover'
+  const closeDetail = useHistoryBackClose(Boolean(detailMonth), () => setDetailMonth(null))
 
   useEffect(() => {
     setCatIndex(null)
@@ -117,7 +119,7 @@ export default function Dashboard() {
   if (detailMonth) {
     return (
       <div className="page">
-        <MonthDetail month={detailMonth} onClose={() => setDetailMonth(null)} />
+        <MonthDetail month={detailMonth} onClose={closeDetail} />
       </div>
     )
   }
@@ -147,7 +149,7 @@ export default function Dashboard() {
           <h2>Start with today’s spend</h2>
           <p>Your Google Sheet is ready. Log a few expenses — Home fills itself.</p>
           <div className="welcome-actions">
-            <Link className="btn primary" to="/expense">
+            <Link className="btn primary" to="/expense" replace>
               Add spend
             </Link>
             {user?.spreadsheetUrl ? (
@@ -160,7 +162,7 @@ export default function Dashboard() {
       ) : null}
 
       <section className="quick-actions" aria-label="Shortcuts">
-        <Link className="quick-card" to="/expense">
+        <Link className="quick-card" to="/expense" replace>
           <span className="quick-ico" aria-hidden>
             −
           </span>
@@ -180,7 +182,7 @@ export default function Dashboard() {
             <span className="quick-label">Open sheet</span>
           </a>
         ) : (
-          <Link className="quick-card" to="/income">
+          <Link className="quick-card" to="/income" replace>
             <span className="quick-ico" aria-hidden>
               +
             </span>

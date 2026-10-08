@@ -95,7 +95,7 @@ export default function AppShell() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <Link to="/" className="brand-link" aria-label="Expense Tracker home">
+        <Link to="/" replace className="brand-link" aria-label="Expense Tracker home">
           <span className="brand-logo-wrap">
             <KharchaLogo size={38} className="brand-logo" />
           </span>
@@ -153,6 +153,7 @@ export default function AppShell() {
             key={to}
             to={to}
             end={end}
+            replace
             className={({ isActive }) => (isActive ? 'nav-item active' : 'nav-item')}
           >
             {({ isActive }) => (
