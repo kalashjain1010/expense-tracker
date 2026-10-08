@@ -235,8 +235,10 @@ export default function AppShell() {
 
       <OfflineBanner />
 
-      <main className="main" ref={swipeTabsRef}>
-        <Outlet />
+      <main className="main main-swipe-host">
+        <div className="main-swipe-pane" ref={swipeTabsRef}>
+          <Outlet />
+        </div>
       </main>
 
       <nav className="bottom-nav" aria-label="Primary">

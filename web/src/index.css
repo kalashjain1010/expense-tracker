@@ -741,6 +741,17 @@ textarea {
   min-height: 40vh;
 }
 
+.main-swipe-host {
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.main-swipe-pane {
+  min-height: 40vh;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
 .page {
   display: flex;
   flex-direction: column;
