@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import bcrypt from 'bcryptjs'
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import express from 'express'
@@ -70,6 +70,26 @@ function normalizePin(raw) {
   const pin = String(raw ?? '').trim()
   if (!/^\d{6}$/.test(pin)) return null
   return pin
+}
+
+/** Hash PIN with scrypt (built-in crypto — no native bcrypt dependency on Vercel). */
+function hashPin(pin) {
+  const salt = randomBytes(16).toString('hex')
+  const hash = scryptSync(pin, salt, 32).toString('hex')
+  return `scrypt:${salt}:${hash}`
+}
+
+function pinMatches(pin, stored) {
+  if (!stored || typeof stored !== 'string') return false
+  const parts = stored.split(':')
+  if (parts[0] === 'scrypt' && parts.length === 3) {
+    const [, salt, hash] = parts
+    const next = scryptSync(pin, salt, 32)
+    const prev = Buffer.from(hash, 'hex')
+    if (prev.length !== next.length) return false
+    return timingSafeEqual(prev, next)
+  }
+  return false
 }
 
 function sessionIdFromRequest(req) {
@@ -239,8 +259,7 @@ app.post('/api/pin', requireUser, async (req, res) => {
   try {
     const pin = normalizePin(req.body?.pin)
     if (!pin) return res.status(400).json({ ok: false, error: 'PIN must be exactly 6 digits' })
-    const hash = await bcrypt.hash(pin, 10)
-    await setUserPinHash(req.user.google_id, hash)
+    await setUserPinHash(req.user.google_id, hashPin(pin))
     res.json({ ok: true, data: { hasPin: true } })
   } catch (err) {
     console.error(err)
@@ -255,8 +274,7 @@ app.post('/api/pin/verify', requireUser, async (req, res) => {
     if (!pin) return res.status(400).json({ ok: false, error: 'PIN must be exactly 6 digits' })
     const hash = req.user.pin_hash
     if (!hash) return res.status(400).json({ ok: false, error: 'No PIN set' })
-    const match = await bcrypt.compare(pin, hash)
-    if (!match) return res.status(401).json({ ok: false, error: 'Wrong PIN' })
+    if (!pinMatches(pin, hash)) return res.status(401).json({ ok: false, error: 'Wrong PIN' })
     res.json({ ok: true, data: { ok: true } })
   } catch (err) {
     console.error(err)
@@ -271,8 +289,7 @@ app.delete('/api/pin', requireUser, async (req, res) => {
     if (!pin) return res.status(400).json({ ok: false, error: 'Current PIN required' })
     const hash = req.user.pin_hash
     if (!hash) return res.json({ ok: true, data: { hasPin: false } })
-    const match = await bcrypt.compare(pin, hash)
-    if (!match) return res.status(401).json({ ok: false, error: 'Wrong PIN' })
+    if (!pinMatches(pin, hash)) return res.status(401).json({ ok: false, error: 'Wrong PIN' })
     await clearUserPin(req.user.google_id)
     res.json({ ok: true, data: { hasPin: false } })
   } catch (err) {
