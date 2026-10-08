@@ -1,5 +1,5 @@
 import 'dotenv/config'
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
+import { randomBytes, scryptSync, timingSafeEqual } from 'crypto'
 import cookieParser from 'cookie-parser'
 import cors from 'cors'
 import express from 'express'

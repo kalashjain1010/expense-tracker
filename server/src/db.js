@@ -15,7 +15,10 @@ function resolveClient() {
     return createClient({ url, authToken })
   }
 
-  // Local file DB for `npm run dev`
+  // Local file DB for `npm run dev` — never mkdir on Vercel (read-only FS)
+  if (process.env.VERCEL) {
+    throw new Error('TURSO_DATABASE_URL is required on Vercel')
+  }
   fs.mkdirSync(dataDir, { recursive: true })
   const fileUrl = url && url.startsWith('file:') ? url : `file:${path.join(dataDir, 'kharcha.db')}`
   return createClient({ url: fileUrl })
