@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { addCreditCard } from '../lib/api'
 import { useEntry } from '../hooks/useKharchaData'
-import { useSwipeDate } from '../hooks/useSwipeDate'
 import DateField from '../components/DateField'
 import EntryModeBanner from '../components/EntryModeBanner'
 import Field, { SavingOverlay, StatusBanner } from '../components/Field'
@@ -15,7 +14,6 @@ export default function CreditPage() {
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState(null)
   const { data: existing, loading, refreshing, error: loadError } = useEntry('credit', date)
-  const swipeRef = useSwipeDate(date, setDate, { disabled: saving })
 
   const matched = Boolean(existing && (!existing.date || existing.date === date))
   const editing = Boolean(matched && existing.found && !(loading && !matched))
@@ -79,10 +77,10 @@ export default function CreditPage() {
   }
 
   return (
-    <div className="page fade-in" ref={swipeRef}>
+    <div className="page fade-in">
       <header className="page-head">
         <h1>{editing ? 'Edit credit card' : 'Credit card'}</h1>
-        <p className="lede">Swipe left/right to change day.</p>
+        <p className="lede">Swipe tabs · swipe the date row to change day.</p>
       </header>
 
       <form className="form" onSubmit={onSubmit}>

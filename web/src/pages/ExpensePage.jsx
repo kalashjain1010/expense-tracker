@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { addExpense } from '../lib/api'
 import { useEntry } from '../hooks/useKharchaData'
-import { useSwipeDate } from '../hooks/useSwipeDate'
 import DateField from '../components/DateField'
 import EntryModeBanner from '../components/EntryModeBanner'
 import Field, { SavingOverlay, StatusBanner } from '../components/Field'
@@ -54,7 +53,6 @@ export default function ExpensePage() {
   const [focusCat, setFocusCat] = useState(() => orderedCategories()[0] || EXPENSE_CATEGORIES[0])
   const [noteHints, setNoteHints] = useState(() => getRecentNotes())
   const { data: existing, loading, refreshing, error: loadError } = useEntry('expense', date)
-  const swipeRef = useSwipeDate(date, setDate, { disabled: saving })
 
   const total = useMemo(
     () =>
@@ -144,10 +142,10 @@ export default function ExpensePage() {
   const busy = saving || loadingEntry
 
   return (
-    <div className="page fade-in" ref={swipeRef}>
+    <div className="page fade-in">
       <header className="page-head">
         <h1>{editing ? 'Edit spend' : 'Add spend'}</h1>
-        <p className="lede">Pin favorites · swipe for days · quick-add chips</p>
+        <p className="lede">Swipe tabs · swipe date row for days · pin with ★</p>
       </header>
 
       <form className="form" onSubmit={onSubmit}>

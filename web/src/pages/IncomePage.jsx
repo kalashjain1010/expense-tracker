@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { addIncome } from '../lib/api'
 import { useEntry } from '../hooks/useKharchaData'
-import { useSwipeDate } from '../hooks/useSwipeDate'
 import DateField from '../components/DateField'
 import EntryModeBanner from '../components/EntryModeBanner'
 import Field, { SavingOverlay, StatusBanner } from '../components/Field'
@@ -15,7 +14,6 @@ export default function IncomePage() {
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState(null)
   const { data: existing, loading, refreshing, error: loadError } = useEntry('income', date)
-  const swipeRef = useSwipeDate(date, setDate, { disabled: saving })
 
   const total = useMemo(() => (Number(you) || 0) + (Number(partner) || 0), [you, partner])
   const matched = Boolean(existing && (!existing.date || existing.date === date))
@@ -78,10 +76,10 @@ export default function IncomePage() {
   }
 
   return (
-    <div className="page fade-in" ref={swipeRef}>
+    <div className="page fade-in">
       <header className="page-head">
         <h1>{editing ? 'Edit income' : 'Add income'}</h1>
-        <p className="lede">Swipe left/right to change day.</p>
+        <p className="lede">Swipe tabs · swipe the date row to change day.</p>
       </header>
 
       <form className="form" onSubmit={onSubmit}>

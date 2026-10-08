@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { useSwipeDate } from '../hooks/useSwipeDate'
 import {
   clampISOToToday,
   formatDisplayDate,
@@ -9,6 +10,7 @@ import {
 
 export default function DateField({ value, onChange, disabled }) {
   const inputRef = useRef(null)
+  const swipeRef = useSwipeDate(value, onChange, { disabled })
   const today = todayISO()
   const isToday = value === today
   const isYesterday = value === yesterdayISO()
@@ -38,7 +40,11 @@ export default function DateField({ value, onChange, disabled }) {
   const nextDisabled = disabled || nextDate > today
 
   return (
-    <div className={`date-field ${disabled ? 'is-disabled' : ''}`}>
+    <div
+      ref={swipeRef}
+      data-swipe-date
+      className={`date-field ${disabled ? 'is-disabled' : ''}`}
+    >
       <div className="date-field-top">
         <span className="field-label">Date</span>
         <div className="date-chips" role="group" aria-label="Quick dates">

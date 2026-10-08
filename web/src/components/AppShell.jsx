@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { prefetchTodayEntries } from '../hooks/useKharchaData'
+import { useSwipeTabs } from '../hooks/useSwipeTabs'
 import { useAuth } from '../lib/auth'
 import { lockApp } from '../lib/pinLock'
 import { getTheme, toggleTheme } from '../lib/theme'
@@ -83,6 +84,7 @@ export default function AppShell() {
   const [signingOut, setSigningOut] = useState(false)
   const [theme, setThemeState] = useState(() => getTheme())
   const [showPinSetup, setShowPinSetup] = useState(false)
+  const swipeTabsRef = useSwipeTabs()
 
   useEffect(() => {
     prefetchTodayEntries()
@@ -233,7 +235,7 @@ export default function AppShell() {
 
       <OfflineBanner />
 
-      <main className="main">
+      <main className="main" ref={swipeTabsRef}>
         <Outlet />
       </main>
 
