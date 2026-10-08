@@ -39,6 +39,7 @@ const app = express()
 const PORT = Number(process.env.PORT || 8787)
 const ORIGIN = process.env.APP_ORIGIN || 'http://127.0.0.1:5173'
 const COOKIE = 'kharcha_session'
+const SESSION_SECRET = process.env.SESSION_SECRET || 'dev-secret'
 const isProd = process.env.NODE_ENV === 'production' || Boolean(process.env.VERCEL)
 
 /** googleId -> layout version last applied (avoid Sheets quota from restyling every request) */
@@ -51,7 +52,13 @@ app.use(
   }),
 )
 app.use(express.json({ limit: '1mb' }))
-app.use(cookieParser(process.env.SESSION_SECRET || 'dev-secret'))
+app.use(cookieParser(SESSION_SECRET))
+// Vercel may pre-populate req.cookies; cookie-parser then skips and never sets req.secret,
+// which breaks res.cookie({ signed: true }) with "cookieParser(\"secret\") required".
+app.use((req, _res, next) => {
+  req.secret = SESSION_SECRET
+  next()
+})
 
 function publicUser(row) {
   if (!row) return null
