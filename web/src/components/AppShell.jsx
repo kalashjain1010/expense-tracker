@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { prefetchTodayEntries } from '../hooks/useKharchaData'
 import { useAuth } from '../lib/auth'
+import { getTheme, toggleTheme } from '../lib/theme'
 import ConfirmDialog from './ConfirmDialog'
 import KharchaLogo from './KharchaLogo'
+import OfflineBanner from './OfflineBanner'
 
 function IconHome({ active }) {
   return (
@@ -77,6 +79,7 @@ export default function AppShell() {
   const { user, logout } = useAuth()
   const [confirmOut, setConfirmOut] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
+  const [theme, setThemeState] = useState(() => getTheme())
 
   useEffect(() => {
     prefetchTodayEntries()
@@ -90,6 +93,10 @@ export default function AppShell() {
       setSigningOut(false)
       setConfirmOut(false)
     }
+  }
+
+  function handleTheme() {
+    setThemeState(toggleTheme())
   }
 
   return (
@@ -120,6 +127,34 @@ export default function AppShell() {
           <button
             type="button"
             className="lock-toggle"
+            onClick={handleTheme}
+            aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+          >
+            {theme === 'dark' ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="1.8" />
+                <path
+                  d="M12 3v1.5M12 19.5V21M4.2 4.2l1.1 1.1M18.7 18.7l1.1 1.1M3 12h1.5M19.5 12H21M4.2 19.8l1.1-1.1M18.7 5.3l1.1-1.1"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path
+                  d="M20 13.5A7.5 7.5 0 1 1 10.5 4 6 6 0 0 0 20 13.5Z"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            )}
+          </button>
+          <button
+            type="button"
+            className="lock-toggle"
             onClick={() => setConfirmOut(true)}
             aria-label="Sign out"
             title="Sign out"
@@ -142,6 +177,8 @@ export default function AppShell() {
           </button>
         </div>
       </header>
+
+      <OfflineBanner />
 
       <main className="main">
         <Outlet />

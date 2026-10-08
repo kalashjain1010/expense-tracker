@@ -1,5 +1,6 @@
 import { EXPENSE_CATEGORIES } from './format'
 
+const BUDGET_KEY = 'expense_month_budget_v1'
 const NOTES_KEY = 'expense_recent_notes_v1'
 const PINS_KEY = 'expense_pinned_cats_v1'
 const LAST_CAT_KEY = 'expense_last_cat_v1'
@@ -21,6 +22,17 @@ function writeJson(key, value) {
   } catch {
     /* private mode / full storage */
   }
+}
+
+export function getMonthBudget() {
+  const n = Number(readJson(BUDGET_KEY, 0))
+  return Number.isFinite(n) && n > 0 ? Math.round(n) : 0
+}
+
+export function setMonthBudget(value) {
+  const n = Math.max(0, Math.round(Number(value) || 0))
+  writeJson(BUDGET_KEY, n)
+  return n
 }
 
 export function getRecentNotes() {

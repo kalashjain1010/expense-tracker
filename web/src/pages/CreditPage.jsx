@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { addCreditCard } from '../lib/api'
 import { useEntry } from '../hooks/useKharchaData'
+import { useSwipeDate } from '../hooks/useSwipeDate'
 import DateField from '../components/DateField'
 import EntryModeBanner from '../components/EntryModeBanner'
 import Field, { SavingOverlay, StatusBanner } from '../components/Field'
+import QuickAmounts from '../components/QuickAmounts'
 import { formatINR, todayISO } from '../lib/format'
 
 export default function CreditPage() {
@@ -13,6 +15,7 @@ export default function CreditPage() {
   const [saving, setSaving] = useState(false)
   const [status, setStatus] = useState(null)
   const { data: existing, loading, refreshing, error: loadError } = useEntry('credit', date)
+  const swipeRef = useSwipeDate(date, setDate, { disabled: saving })
 
   const matched = Boolean(existing && (!existing.date || existing.date === date))
   const editing = Boolean(matched && existing.found && !(loading && !matched))
@@ -41,6 +44,10 @@ export default function CreditPage() {
     if (loadError) setStatus({ type: 'error', message: loadError })
   }, [loadError])
 
+  function addAmount(amount) {
+    setTotal(String((Number(total) || 0) + amount))
+  }
+
   async function onSubmit(e) {
     e.preventDefault()
     const amount = Number(total) || 0
@@ -52,11 +59,18 @@ export default function CreditPage() {
     setStatus(null)
     try {
       const data = await addCreditCard({ date, total: amount, items })
-      const verb = data.updated ? 'Updated' : 'Saved'
-      setStatus({
-        type: 'ok',
-        message: data.demo ? `Demo · ${formatINR(amount)}` : `${verb} · ${formatINR(data.total ?? amount)}`,
-      })
+      if (data.queued) {
+        setStatus({
+          type: 'ok',
+          message: `Saved offline · ${formatINR(data.total ?? amount)} — syncs when you’re back online`,
+        })
+      } else {
+        const verb = data.updated ? 'Updated' : 'Saved'
+        setStatus({
+          type: 'ok',
+          message: `${verb} · ${formatINR(data.total ?? amount)}`,
+        })
+      }
     } catch (err) {
       setStatus({ type: 'error', message: err.message || 'Save failed' })
     } finally {
@@ -65,10 +79,10 @@ export default function CreditPage() {
   }
 
   return (
-    <div className="page fade-in">
+    <div className="page fade-in" ref={swipeRef}>
       <header className="page-head">
         <h1>{editing ? 'Edit credit card' : 'Credit card'}</h1>
-        <p className="lede">Pick a date — existing data loads automatically.</p>
+        <p className="lede">Swipe left/right to change day.</p>
       </header>
 
       <form className="form" onSubmit={onSubmit}>
@@ -91,6 +105,8 @@ export default function CreditPage() {
             required
           />
         </Field>
+
+        <QuickAmounts disabled={busy} label="Quick add to total" onAdd={addAmount} />
 
         <Field label="Items" hint="e.g. Fridge – 17500, Gyser – 3500">
           <textarea

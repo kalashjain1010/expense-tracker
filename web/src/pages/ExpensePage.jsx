@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { addExpense } from '../lib/api'
 import { useEntry } from '../hooks/useKharchaData'
+import { useSwipeDate } from '../hooks/useSwipeDate'
 import DateField from '../components/DateField'
 import EntryModeBanner from '../components/EntryModeBanner'
 import Field, { SavingOverlay, StatusBanner } from '../components/Field'
+import QuickAmounts from '../components/QuickAmounts'
 import { CATEGORY_LABELS, EXPENSE_CATEGORIES, formatINR, todayISO } from '../lib/format'
 import {
   getPinnedCategories,
@@ -49,8 +51,10 @@ export default function ExpensePage() {
   const [status, setStatus] = useState(null)
   const [catOrder, setCatOrder] = useState(() => orderedCategories())
   const [pins, setPins] = useState(() => getPinnedCategories())
+  const [focusCat, setFocusCat] = useState(() => orderedCategories()[0] || EXPENSE_CATEGORIES[0])
   const [noteHints, setNoteHints] = useState(() => getRecentNotes())
   const { data: existing, loading, refreshing, error: loadError } = useEntry('expense', date)
+  const swipeRef = useSwipeDate(date, setDate, { disabled: saving })
 
   const total = useMemo(
     () =>
@@ -61,11 +65,9 @@ export default function ExpensePage() {
     [categories],
   )
 
-  // Prefill as soon as entry data for THIS date is available (don't wait out loading if cache hit)
   useEffect(() => {
     setStatus(null)
     if (!existing || (existing.date && existing.date !== date)) {
-      // Date changed / no data yet — clear so we don't flash another day's values
       if (!loading) {
         setCategories(emptyCats())
         setNote('')
@@ -89,6 +91,11 @@ export default function ExpensePage() {
     setCategories((prev) => ({ ...prev, [name]: value }))
   }
 
+  function addToFocused(amount) {
+    const cur = Number(categories[focusCat]) || 0
+    setCat(focusCat, String(cur + amount))
+  }
+
   function onPin(category) {
     const next = togglePinnedCategory(category)
     setPins(next)
@@ -106,16 +113,24 @@ export default function ExpensePage() {
     try {
       const data = await addExpense({ date, categories, note })
       setNoteHints(rememberNote(note))
-      const used = primaryCategory(categories)
+      const used = primaryCategory(categories) || focusCat
       if (used) {
         setLastUsedCategory(used)
         setCatOrder(orderedCategories())
+        setFocusCat(used)
       }
-      const verb = data.updated ? 'Updated' : 'Saved'
-      setStatus({
-        type: 'ok',
-        message: data.demo ? `Demo · ${formatINR(total)}` : `${verb} · ${formatINR(data.total ?? total)}`,
-      })
+      if (data.queued) {
+        setStatus({
+          type: 'ok',
+          message: `Saved offline · ${formatINR(data.total ?? total)} — syncs when you’re back online`,
+        })
+      } else {
+        const verb = data.updated ? 'Updated' : 'Saved'
+        setStatus({
+          type: 'ok',
+          message: `${verb} · ${formatINR(data.total ?? total)}`,
+        })
+      }
     } catch (err) {
       setStatus({ type: 'error', message: err.message || 'Save failed' })
     } finally {
@@ -129,10 +144,10 @@ export default function ExpensePage() {
   const busy = saving || loadingEntry
 
   return (
-    <div className="page fade-in">
+    <div className="page fade-in" ref={swipeRef}>
       <header className="page-head">
         <h1>{editing ? 'Edit spend' : 'Add spend'}</h1>
-        <p className="lede">Amounts by category · pin favorites with ★</p>
+        <p className="lede">Pin favorites · swipe for days · quick-add chips</p>
       </header>
 
       <form className="form" onSubmit={onSubmit}>
@@ -141,6 +156,12 @@ export default function ExpensePage() {
           loading={loadingEntry || (refreshing && !matched)}
           existing={matched ? existing : null}
           label="spend"
+        />
+
+        <QuickAmounts
+          disabled={busy}
+          label={`Quick add → ${CATEGORY_LABELS[focusCat] || focusCat}`}
+          onAdd={addToFocused}
         />
 
         <div className={`cat-grid ${loadingEntry ? 'is-dim' : ''}`}>
@@ -169,6 +190,7 @@ export default function ExpensePage() {
                   placeholder="—"
                   value={categories[c]}
                   disabled={busy}
+                  onFocus={() => setFocusCat(c)}
                   onChange={(e) => setCat(c, e.target.value)}
                 />
               </div>

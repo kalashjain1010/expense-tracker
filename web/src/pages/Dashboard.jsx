@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import BudgetCard from '../components/BudgetCard'
 import MonthDetail from '../components/MonthDetail'
 import { DashboardSkeleton } from '../components/Skeleton'
 import { useHistoryBackClose } from '../hooks/useHistoryBackClose'
@@ -227,6 +228,8 @@ export default function Dashboard() {
           {topSpend ? <span className="kpi-sub">{formatINR(topSpend.value)}</span> : null}
         </div>
       </section>
+
+      <BudgetCard spent={data.mtd.spend} />
 
       <section className="panel">
         <div className="panel-head">
