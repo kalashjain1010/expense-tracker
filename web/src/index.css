@@ -1787,6 +1787,112 @@ textarea {
   gap: 0.6rem;
 }
 
+.cat-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+}
+
+.cat-field-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  min-height: 1.1rem;
+}
+
+.cat-field input {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 11px;
+  padding: 0.7rem 0.8rem;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cat-field input:focus {
+  border-color: rgba(26, 92, 69, 0.45);
+  box-shadow: 0 0 0 3px rgba(26, 92, 69, 0.12);
+}
+
+.cat-field input:disabled {
+  opacity: 0.65;
+}
+
+.cat-field.is-pinned input {
+  border-color: rgba(26, 92, 69, 0.35);
+  background: var(--green-soft);
+}
+
+.pin-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1;
+  padding: 0.1rem 0.15rem;
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+.pin-btn.on {
+  color: var(--green-deep);
+}
+
+.pin-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.search-field {
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+.search-field input {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 11px;
+  padding: 0.65rem 0.8rem;
+  color: var(--ink);
+  outline: none;
+}
+
+.search-field input:focus {
+  border-color: rgba(26, 92, 69, 0.45);
+  box-shadow: 0 0 0 3px rgba(26, 92, 69, 0.12);
+}
+
+.note-hints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: -0.25rem;
+}
+
+.note-hint {
+  max-width: 100%;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.32rem 0.55rem;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note-hint:active:not(:disabled) {
+  color: var(--green-deep);
+  background: var(--green-soft);
+}
+
 .total-bar {
   display: flex;
   align-items: center;

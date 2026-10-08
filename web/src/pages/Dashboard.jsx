@@ -46,12 +46,25 @@ export default function Dashboard() {
   const [catIndex, setCatIndex] = useState(null)
   const [detailMonth, setDetailMonth] = useState(null)
   const [pickMonth, setPickMonth] = useState('')
+  const [noteQuery, setNoteQuery] = useState('')
   const trigger = useChartTrigger()
   const canHover = trigger === 'hover'
 
   useEffect(() => {
     setCatIndex(null)
   }, [scope])
+
+  const filteredRecent = useMemo(() => {
+    const list = data?.recent || []
+    const q = noteQuery.trim().toLowerCase()
+    if (!q) return list
+    return list.filter((r) => {
+      const note = String(r.note || '').toLowerCase()
+      const type = String(ENTRY_TYPE_LABELS[r.type] || r.type || '').toLowerCase()
+      const date = String(r.date || '')
+      return note.includes(q) || type.includes(q) || date.includes(q)
+    })
+  }, [data, noteQuery])
 
   const chartMonths = useMemo(
     () =>
@@ -472,23 +485,39 @@ export default function Dashboard() {
         {(data.recent || []).length === 0 ? (
           <p className="muted">No recent entries yet.</p>
         ) : (
-          <ul className="recent-list">
-            {(data.recent || []).map((r, i) => (
-              <li key={`${r.type}-${r.date}-${i}`}>
-                <div>
-                  <div className="recent-top">
-                    <strong className="recent-type">{ENTRY_TYPE_LABELS[r.type] || r.type}</strong>
-                    <span className="muted">{r.date}</span>
-                  </div>
-                  {r.note ? <p className="recent-note">{r.note}</p> : null}
-                </div>
-                <strong className={r.type === 'income' ? 'pos' : 'neg'}>
-                  {r.type === 'income' ? '+' : '−'}
-                  {formatINR(r.total)}
-                </strong>
-              </li>
-            ))}
-          </ul>
+          <>
+            <label className="search-field">
+              <span className="sr-only">Search notes</span>
+              <input
+                type="search"
+                value={noteQuery}
+                onChange={(e) => setNoteQuery(e.target.value)}
+                placeholder="Search notes, type, date…"
+                autoComplete="off"
+              />
+            </label>
+            {filteredRecent.length === 0 ? (
+              <p className="muted">No matches for “{noteQuery.trim()}”.</p>
+            ) : (
+              <ul className="recent-list">
+                {filteredRecent.map((r, i) => (
+                  <li key={`${r.type}-${r.date}-${i}`}>
+                    <div>
+                      <div className="recent-top">
+                        <strong className="recent-type">{ENTRY_TYPE_LABELS[r.type] || r.type}</strong>
+                        <span className="muted">{r.date}</span>
+                      </div>
+                      {r.note ? <p className="recent-note">{r.note}</p> : null}
+                    </div>
+                    <strong className={r.type === 'income' ? 'pos' : 'neg'}>
+                      {r.type === 'income' ? '+' : '−'}
+                      {formatINR(r.total)}
+                    </strong>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </section>
 
