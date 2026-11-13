@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../lib/auth'
 import {
   Bar,
   BarChart,
@@ -13,9 +14,17 @@ import {
 import BudgetCard from '../components/BudgetCard'
 import MonthDetail from '../components/MonthDetail'
 import { DashboardSkeleton } from '../components/Skeleton'
+import {
+  EntryTypeIcon,
+  IconCard,
+  IconChevron,
+  IconIncome,
+  IconPlus,
+  IconSheet,
+  IconSpend,
+} from '../components/TypeIcons'
 import { useHistoryBackClose } from '../hooks/useHistoryBackClose'
 import { useSummary } from '../hooks/useKharchaData'
-import { useAuth } from '../lib/auth'
 import {
   allMonthKeys,
   CATEGORY_LABELS,
@@ -23,25 +32,27 @@ import {
   formatINR,
   monthLabelFromKey,
 } from '../lib/format'
+import {
+  currentMonthKey,
+  daysElapsedInMonth,
+  daysInMonth,
+  formatLongDate,
+  greetingForNow,
+  prevMonthKey,
+  spendPaceInsight,
+} from '../lib/insights'
+
+const RECENT_PATH = {
+  expense: '/expense',
+  income: '/income',
+  credit: '/credit',
+}
 
 const PIE_COLORS = ['#0f3d2e', '#1a5c45', '#2d7a5c', '#4a9a74', '#7bb892', '#a8d0b8', '#c4a574', '#b87a4a']
 const MONTH_PICK_START = '2024-07'
-
-/** Prefer click on touch / coarse pointers; hover on desktop. */
-function useChartTrigger() {
-  const [trigger, setTrigger] = useState('click')
-  useEffect(() => {
-    const mq = window.matchMedia('(hover: hover) and (pointer: fine)')
-    const sync = () => setTrigger(mq.matches ? 'hover' : 'click')
-    sync()
-    mq.addEventListener?.('change', sync)
-    return () => mq.removeEventListener?.('change', sync)
-  }, [])
-  return trigger
-}
-
 export default function Dashboard() {
   const { user } = useAuth()
+  const sheetUrl = user?.spreadsheetUrl || ''
   const { data, error, loading, refreshing, refetch } = useSummary()
   const [scope, setScope] = useState('mtd')
   const [monthIndex, setMonthIndex] = useState(null)
@@ -49,8 +60,7 @@ export default function Dashboard() {
   const [detailMonth, setDetailMonth] = useState(null)
   const [pickMonth, setPickMonth] = useState('')
   const [noteQuery, setNoteQuery] = useState('')
-  const trigger = useChartTrigger()
-  const canHover = trigger === 'hover'
+  // Mobile-first: always tap/click bars (hover is awkward on phone)
   const closeDetail = useHistoryBackClose(Boolean(detailMonth), () => setDetailMonth(null))
 
   useEffect(() => {
@@ -71,10 +81,12 @@ export default function Dashboard() {
 
   const chartMonths = useMemo(
     () =>
-      (data?.byMonth || []).map((m) => ({
-        ...m,
-        label: monthLabelFromKey(m.month),
-      })),
+      (data?.byMonth || [])
+        .map((m) => ({
+          ...m,
+          label: monthLabelFromKey(m.month),
+        }))
+        .slice(-4), // last 4 months — readable on mobile
     [data],
   )
 
@@ -89,16 +101,6 @@ export default function Dashboard() {
       credit: byKey[key]?.credit ?? null,
     }))
   }, [data])
-
-  const quickMonths = useMemo(() => {
-    const keys = []
-    const d = new Date()
-    for (let i = 0; i < 4; i++) {
-      const dt = new Date(d.getFullYear(), d.getMonth() - i, 1)
-      keys.push(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`)
-    }
-    return keys
-  }, [])
 
   if (loading && !data) return <DashboardSkeleton />
 
@@ -131,70 +133,29 @@ export default function Dashboard() {
   const selectedCat = catIndex != null ? cats[catIndex] : null
   const catTotal = cats.reduce((s, c) => s + (c.value || 0), 0)
 
-  const now = new Date()
-  const thisMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const thisMonthKey = currentMonthKey()
+  const lastKey = prevMonthKey(thisMonthKey)
+  const lastSpend = (data.byMonth || []).find((m) => m.month === lastKey)?.spend || 0
+  const pace = spendPaceInsight(data.mtd.spend, lastSpend)
+  const elapsed = daysElapsedInMonth(thisMonthKey)
+  const totalDays = daysInMonth(thisMonthKey)
+  const monthProgress = Math.min(100, Math.round((elapsed / totalDays) * 100))
+  const monthName = monthLabelFromKey(thisMonthKey)
+
   const defaultPick =
     pickMonth ||
     (monthPickOptions.find((m) => m.month === thisMonthKey) || monthPickOptions[0] || {})?.month ||
     ''
 
-  const isEmpty =
-    !(data.byMonth || []).some((m) => m.spend || m.income || m.credit) &&
-    !(data.recent || []).length
-
   return (
-    <div className="page fade-in">
-      {isEmpty ? (
-        <section className="welcome-banner">
-          <p className="welcome-kicker">You’re in</p>
-          <h2>Start with today’s spend</h2>
-          <p>Your Google Sheet is ready. Log a few expenses — Home fills itself.</p>
-          <div className="welcome-actions">
-            <Link className="btn primary" to="/expense" replace>
-              Add spend
-            </Link>
-            {user?.spreadsheetUrl ? (
-              <a className="btn ghost" href={user.spreadsheetUrl} target="_blank" rel="noreferrer">
-                Open sheet
-              </a>
-            ) : null}
+    <div className="page home-page fade-in">
+      <section className="home-hero" aria-label="This month overview">
+        <div className="home-hero-glow" aria-hidden />
+        <div className="home-hero-top">
+          <div>
+            <p className="home-hero-date">{formatLongDate()}</p>
+            <h1 className="home-hero-greet">{greetingForNow()}</h1>
           </div>
-        </section>
-      ) : null}
-
-      <section className="quick-actions" aria-label="Shortcuts">
-        <Link className="quick-card" to="/expense" replace>
-          <span className="quick-ico" aria-hidden>
-            −
-          </span>
-          <span className="quick-label">Add spend</span>
-        </Link>
-        <button type="button" className="quick-card" onClick={() => setDetailMonth(thisMonthKey)}>
-          <span className="quick-ico" aria-hidden>
-            ▦
-          </span>
-          <span className="quick-label">This month</span>
-        </button>
-        {user?.spreadsheetUrl ? (
-          <a className="quick-card" href={user.spreadsheetUrl} target="_blank" rel="noreferrer">
-            <span className="quick-ico" aria-hidden>
-              ↗
-            </span>
-            <span className="quick-label">Open sheet</span>
-          </a>
-        ) : (
-          <Link className="quick-card" to="/income" replace>
-            <span className="quick-ico" aria-hidden>
-              +
-            </span>
-            <span className="quick-label">Add income</span>
-          </Link>
-        )}
-      </section>
-
-      <section className="hero-block">
-        <div className="hero-top">
-          <p className="hero-kicker">This month</p>
           <button
             type="button"
             className={`refresh-btn ${refreshing ? 'is-spinning' : ''}`}
@@ -202,81 +163,155 @@ export default function Dashboard() {
             disabled={refreshing}
             aria-label="Refresh"
           >
-            {refreshing ? 'Updating…' : 'Refresh'}
+            {refreshing ? '…' : '↻'}
           </button>
         </div>
-        <p className="hero-amount">{formatINR(data.mtd.spend)}</p>
-        <p className="hero-meta">
-          spent · net <span>{formatINR(data.mtd.net)}</span>
-        </p>
+
+        <Link to="/expense?view=month" className="home-hero-main is-link">
+          <div className="home-hero-copy">
+            <p className="home-hero-kicker">
+              <IconSpend size={12} /> {monthName} spend
+            </p>
+            <p className="home-hero-amount">{formatINR(data.mtd.spend)}</p>
+            <p className="home-hero-meta">
+              Net{' '}
+              <strong className={data.mtd.net < 0 ? 'is-neg' : ''}>{formatINR(data.mtd.net)}</strong>
+              {topSpend ? ` · ${CATEGORY_LABELS[topSpend.name] || topSpend.name}` : ''}
+              <span className="home-hero-tap">
+                Month view <IconChevron size={12} />
+              </span>
+            </p>
+          </div>
+
+          <div
+            className="home-ring"
+            role="img"
+            aria-label={`Day ${elapsed} of ${totalDays}, ${monthProgress}% through the month`}
+          >
+            <svg viewBox="0 0 80 80" width="72" height="72">
+              <circle className="home-ring-track" cx="40" cy="40" r="32" />
+              <circle
+                className="home-ring-value"
+                cx="40"
+                cy="40"
+                r="32"
+                strokeDasharray={2 * Math.PI * 32}
+                strokeDashoffset={2 * Math.PI * 32 * (1 - monthProgress / 100)}
+              />
+            </svg>
+            <div className="home-ring-label">
+              <strong>
+                {elapsed}
+                <span>/{totalDays}</span>
+              </strong>
+              <em>days</em>
+            </div>
+          </div>
+        </Link>
+
+        <div className="home-stat-strip" aria-label="Jump to month totals">
+          <Link to="/income?view=month" className="home-stat">
+            <span className="home-stat-ico" aria-hidden>
+              <IconIncome size={14} />
+            </span>
+            <span className="home-stat-copy">
+              <span>Income</span>
+              <strong>{formatINR(data.mtd.income)}</strong>
+            </span>
+            <IconChevron size={12} />
+          </Link>
+          <Link to="/credit" className="home-stat">
+            <span className="home-stat-ico" aria-hidden>
+              <IconCard size={14} />
+            </span>
+            <span className="home-stat-copy">
+              <span>
+                {data.creditOutstanding != null || data.mtd?.creditOutstanding != null
+                  ? 'Card due'
+                  : 'Card'}
+              </span>
+              <strong>
+                {formatINR(
+                  data.creditOutstanding ?? data.mtd?.creditOutstanding ?? data.mtd.credit,
+                )}
+              </strong>
+            </span>
+            <IconChevron size={12} />
+          </Link>
+        </div>
+
+        <div className="home-cta-row">
+          <Link to="/expense" className="home-cta primary">
+            <IconPlus size={14} />
+            <span>Log spend</span>
+          </Link>
+          <Link to="/income" className="home-cta">
+            <IconIncome size={14} />
+            <span>Income</span>
+          </Link>
+          {sheetUrl ? (
+            <a
+              className="home-cta ghost"
+              href={sheetUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <IconSheet size={14} />
+              <span>Sheet</span>
+            </a>
+          ) : null}
+        </div>
       </section>
 
-      <section className="kpi-row">
-        <div className="kpi">
-          <span className="kpi-label">Income</span>
-          <strong>{formatINR(data.mtd.income)}</strong>
-        </div>
-        <div className="kpi">
-          <span className="kpi-label">Card</span>
-          <strong>{formatINR(data.mtd.credit)}</strong>
-        </div>
-        <div className="kpi">
-          <span className="kpi-label">Top</span>
-          <strong className="kpi-ellipsis">
-            {topSpend ? CATEGORY_LABELS[topSpend.name] || topSpend.name : '—'}
-          </strong>
-          {topSpend ? <span className="kpi-sub">{formatINR(topSpend.value)}</span> : null}
-        </div>
-      </section>
+      {pace ? (
+        <section className="noticed-card">
+          <div className="noticed-eyebrow">Noticed</div>
+          <p>
+            At this pace {monthName} lands near <strong>{formatINR(pace.pace)}</strong>
+            {pace.compareLabel ? ` — ${pace.compareLabel}` : '.'}
+          </p>
+        </section>
+      ) : null}
 
       <BudgetCard spent={data.mtd.spend} />
 
-      <section className="panel">
+      <section className="panel soft-panel panel-chart">
         <div className="panel-head">
-          <h2>Spend by month</h2>
-          <span className="panel-hint">{canHover ? 'Hover a bar' : 'Tap a bar'}</span>
+          <h2>Money in & out</h2>
+          <span className="panel-hint">Select a month</span>
         </div>
-        <div
-          className="chart-wrap"
-          tabIndex={-1}
-          onMouseDown={(e) => e.preventDefault()}
-        >
-          <ResponsiveContainer width="100%" height={200} minWidth={0}>
+        <div className="chart-legend">
+          <span>
+            <i className="lg-spend" /> Spend
+          </span>
+          <span>
+            <i className="lg-income" /> Income
+          </span>
+        </div>
+        <div className="chart-wrap" tabIndex={-1} onMouseDown={(e) => e.preventDefault()}>
+          <ResponsiveContainer width="100%" height={280} minWidth={0}>
             <BarChart
               data={chartMonths}
               margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
               style={{ outline: 'none' }}
-              onMouseMove={
-                canHover
-                  ? (state) => {
-                      if (state?.activeTooltipIndex == null) return
-                      setMonthIndex(Number(state.activeTooltipIndex))
-                    }
-                  : undefined
-              }
-              onMouseLeave={canHover ? () => setMonthIndex(null) : undefined}
-              onClick={
-                canHover
-                  ? undefined
-                  : (state) => {
-                      if (state?.activeTooltipIndex == null) {
-                        setMonthIndex(null)
-                        return
-                      }
-                      const idx = Number(state.activeTooltipIndex)
-                      setMonthIndex((prev) => (prev === idx ? null : idx))
-                    }
-              }
+              onClick={(state) => {
+                if (state?.activeTooltipIndex == null) {
+                  setMonthIndex(null)
+                  return
+                }
+                const idx = Number(state.activeTooltipIndex)
+                setMonthIndex((prev) => (prev === idx ? null : idx))
+              }}
             >
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 10, fill: '#6b7c74' }}
+                tick={{ fontSize: 10, fill: 'currentColor', opacity: 0.55 }}
                 axisLine={false}
                 tickLine={false}
                 interval="preserveStartEnd"
               />
               <YAxis
-                tick={{ fontSize: 10, fill: '#6b7c74' }}
+                tick={{ fontSize: 10, fill: 'currentColor', opacity: 0.55 }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))}
@@ -292,9 +327,25 @@ export default function Dashboard() {
               >
                 {chartMonths.map((_, i) => (
                   <Cell
-                    key={i}
+                    key={`s-${i}`}
                     fill={monthIndex === i ? '#0f3d2e' : '#1a5c45'}
-                    fillOpacity={monthIndex == null || monthIndex === i ? 1 : 0.35}
+                    fillOpacity={monthIndex == null || monthIndex === i ? 1 : 0.32}
+                    style={{ cursor: 'pointer', outline: 'none' }}
+                  />
+                ))}
+              </Bar>
+              <Bar
+                dataKey="income"
+                radius={[6, 6, 0, 0]}
+                maxBarSize={28}
+                isAnimationActive={monthIndex == null}
+                animationDuration={700}
+              >
+                {chartMonths.map((_, i) => (
+                  <Cell
+                    key={`i-${i}`}
+                    fill={monthIndex === i ? '#7bb892' : '#a8d0b8'}
+                    fillOpacity={monthIndex == null || monthIndex === i ? 1 : 0.32}
                     style={{ cursor: 'pointer', outline: 'none' }}
                   />
                 ))}
@@ -304,7 +355,7 @@ export default function Dashboard() {
         </div>
         <div className={`chart-insight ${selectedMonth ? 'has-selection' : ''}`}>
           <p className="chart-insight-hint muted tip center">
-            {canHover ? 'Hover a bar for spend / income / card' : 'Tap a bar for spend / income / card'}
+            Select a bar for spend · income · card
           </p>
           <div className="chart-detail" aria-hidden={!selectedMonth}>
             {selectedMonth ? (
@@ -323,10 +374,10 @@ export default function Dashboard() {
                 </div>
                 <button
                   type="button"
-                  className="btn ghost chart-open-month"
+                  className="text-btn chart-open-month"
                   onClick={() => setDetailMonth(selectedMonth.month)}
                 >
-                  Open month view
+                  Open {selectedMonth.label} days →
                 </button>
               </>
             ) : null}
@@ -334,63 +385,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="panel">
-        <div className="panel-head">
-          <h2>Month view</h2>
-        </div>
-        <p className="muted tip">Tap a month for day-by-day spend, income, and card — or add from there.</p>
-        <div className="month-chip-row" role="list">
-          {quickMonths.map((key) => {
-            const opt = monthPickOptions.find((m) => m.month === key)
-            const isThis = key === thisMonthKey
-            return (
-              <button
-                key={key}
-                type="button"
-                role="listitem"
-                className={`month-chip ${isThis ? 'is-current' : ''}`}
-                onClick={() => {
-                  setPickMonth(key)
-                  setDetailMonth(key)
-                }}
-              >
-                <span className="month-chip-label">{monthLabelFromKey(key)}</span>
-                <span className="month-chip-val">
-                  {opt?.spend != null ? formatINR(opt.spend) : isThis ? formatINR(data.mtd.spend) : '—'}
-                </span>
-              </button>
-            )
-          })}
-        </div>
-        <div className="month-pick-row">
-          <label className="sr-only" htmlFor="month-pick">
-            More months
-          </label>
-          <select
-            id="month-pick"
-            className="month-select"
-            value={defaultPick}
-            onChange={(e) => setPickMonth(e.target.value)}
-          >
-            {monthPickOptions.map((m) => (
-              <option key={m.month} value={m.month}>
-                {monthLabelFromKey(m.month)}
-                {m.spend != null ? ` · ${formatINR(m.spend)}` : ''}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            className="btn primary"
-            disabled={!defaultPick}
-            onClick={() => setDetailMonth(defaultPick)}
-          >
-            Open
-          </button>
-        </div>
-      </section>
-
-      <section className="panel">
+      <section className="panel soft-panel panel-cats">
         <div className="panel-head">
           <h2>Where it goes</h2>
           <div className="segmented">
@@ -407,11 +402,7 @@ export default function Dashboard() {
         ) : (
           <>
             <div className="split-chart">
-              <div
-                className="chart-wrap pie"
-                tabIndex={-1}
-                onMouseDown={(e) => e.preventDefault()}
-              >
+              <div className="chart-wrap pie" tabIndex={-1} onMouseDown={(e) => e.preventDefault()}>
                 <ResponsiveContainer width="100%" height={160}>
                   <PieChart style={{ outline: 'none' }}>
                     <Pie
@@ -459,9 +450,7 @@ export default function Dashboard() {
               </ul>
             </div>
             <div className={`chart-insight chart-insight-cat ${selectedCat ? 'has-selection' : ''}`}>
-              <p className="chart-insight-hint muted tip center">
-                {canHover ? 'Hover a slice or tap a category' : 'Tap a slice or category for details'}
-              </p>
+              <p className="chart-insight-hint muted tip center">Select a category</p>
               <div className="chart-detail" aria-hidden={!selectedCat}>
                 {selectedCat ? (
                   <>
@@ -483,9 +472,45 @@ export default function Dashboard() {
         )}
       </section>
 
-      <section className="panel">
+      <section className="panel soft-panel panel-month-pick">
         <div className="panel-head">
-          <h2>Recent</h2>
+          <h2>Open a month</h2>
+        </div>
+        <p className="muted tip">Day-by-day spend, income, and card.</p>
+        <div className="month-pick-row">
+          <label className="sr-only" htmlFor="month-pick">
+            Month
+          </label>
+          <select
+            id="month-pick"
+            className="month-select"
+            value={defaultPick}
+            onChange={(e) => setPickMonth(e.target.value)}
+          >
+            {monthPickOptions.map((m) => (
+              <option key={m.month} value={m.month}>
+                {monthLabelFromKey(m.month)}
+                {m.spend != null ? ` · ${formatINR(m.spend)}` : ''}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            className="btn primary btn-compact"
+            disabled={!defaultPick}
+            onClick={() => setDetailMonth(defaultPick)}
+          >
+            View days
+          </button>
+        </div>
+      </section>
+
+      <section className="panel soft-panel panel-latest">
+        <div className="panel-head">
+          <h2>Latest</h2>
+          <Link to="/expense?view=month" className="text-btn">
+            See spend →
+          </Link>
         </div>
         {(data.recent || []).length === 0 ? (
           <p className="muted">No recent entries yet.</p>
@@ -497,29 +522,43 @@ export default function Dashboard() {
                 type="search"
                 value={noteQuery}
                 onChange={(e) => setNoteQuery(e.target.value)}
-                placeholder="Search notes, type, date…"
+                placeholder="Search a note, type, date…"
                 autoComplete="off"
               />
             </label>
             {filteredRecent.length === 0 ? (
               <p className="muted">No matches for “{noteQuery.trim()}”.</p>
             ) : (
-              <ul className="recent-list">
-                {filteredRecent.map((r, i) => (
-                  <li key={`${r.type}-${r.date}-${i}`}>
-                    <div>
-                      <div className="recent-top">
-                        <strong className="recent-type">{ENTRY_TYPE_LABELS[r.type] || r.type}</strong>
-                        <span className="muted">{r.date}</span>
-                      </div>
-                      {r.note ? <p className="recent-note">{r.note}</p> : null}
-                    </div>
-                    <strong className={r.type === 'income' ? 'pos' : 'neg'}>
-                      {r.type === 'income' ? '+' : '−'}
-                      {formatINR(r.total)}
-                    </strong>
-                  </li>
-                ))}
+              <ul className="activity-list">
+                {filteredRecent.map((r, i) => {
+                  const base = RECENT_PATH[r.type] || '/expense'
+                  return (
+                    <li key={`${r.type}-${r.date}-${i}`} style={{ animationDelay: `${Math.min(i, 8) * 0.04}s` }}>
+                      <Link to={`${base}?date=${r.date}`} className="activity-row">
+                        <span className={`activity-icon ${r.type}`} aria-hidden>
+                          <EntryTypeIcon type={r.type} size={16} />
+                        </span>
+                        <span className="activity-main">
+                          <strong>{ENTRY_TYPE_LABELS[r.type] || r.type}</strong>
+                          <span className="activity-meta">
+                            {r.date}
+                            {r.note ? ` · ${r.note}` : ''}
+                          </span>
+                        </span>
+                        <strong
+                          className={`activity-amt ${
+                            r.type === 'income' ? 'pos' : r.type === 'credit' ? 'credit' : 'neg'
+                          }`}
+                        >
+                          {`${r.type === 'income' ? '+' : '−'}${formatINR(r.total)}`}
+                        </strong>
+                        <span className="activity-chev" aria-hidden>
+                          <IconChevron size={13} />
+                        </span>
+                      </Link>
+                    </li>
+                  )
+                })}
               </ul>
             )}
           </>

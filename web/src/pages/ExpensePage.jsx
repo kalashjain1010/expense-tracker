@@ -1,11 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { addExpense } from '../lib/api'
 import { useEntry } from '../hooks/useKharchaData'
 import DateField from '../components/DateField'
 import EntryModeBanner from '../components/EntryModeBanner'
 import Field, { SavingOverlay, StatusBanner } from '../components/Field'
+import ModeSwitch from '../components/ModeSwitch'
+import MonthTotalChip from '../components/MonthTotalChip'
 import QuickAmounts from '../components/QuickAmounts'
-import { CATEGORY_LABELS, EXPENSE_CATEGORIES, formatINR, todayISO } from '../lib/format'
+import TabMonthView from '../components/TabMonthView'
+import { CategoryIcon } from '../components/TypeIcons'
+import {
+  CATEGORY_LABELS,
+  EXPENSE_CATEGORIES,
+  clampISOToToday,
+  formatINR,
+  todayISO,
+} from '../lib/format'
 import {
   getPinnedCategories,
   getRecentNotes,
@@ -19,14 +30,17 @@ const emptyCats = () => Object.fromEntries(EXPENSE_CATEGORIES.map((c) => [c, '']
 
 function catsFromEntry(categories = {}) {
   const next = emptyCats()
-  const lowerMap = Object.fromEntries(
-    Object.entries(categories || {}).map(([k, v]) => [String(k).toLowerCase(), v]),
-  )
   EXPENSE_CATEGORIES.forEach((c) => {
-    const v = categories[c] ?? lowerMap[c.toLowerCase()]
+    const v = categories[c]
     next[c] = v === 0 || v === '' || v == null ? '' : String(v)
   })
   return next
+}
+
+function initialDateFromUrl(params) {
+  const raw = params.get('date')
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return todayISO()
+  return clampISOToToday(raw)
 }
 
 function primaryCategory(categories) {
@@ -43,7 +57,9 @@ function primaryCategory(categories) {
 }
 
 export default function ExpensePage() {
-  const [date, setDate] = useState(todayISO())
+  const [searchParams] = useSearchParams()
+  const [mode, setMode] = useState(() => (searchParams.get('view') === 'month' ? 'month' : 'log'))
+  const [date, setDate] = useState(() => initialDateFromUrl(searchParams))
   const [categories, setCategories] = useState(emptyCats)
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
@@ -53,6 +69,11 @@ export default function ExpensePage() {
   const [focusCat, setFocusCat] = useState(() => orderedCategories()[0] || EXPENSE_CATEGORIES[0])
   const [noteHints, setNoteHints] = useState(() => getRecentNotes())
   const { data: existing, loading, refreshing, error: loadError } = useEntry('expense', date)
+
+  useEffect(() => {
+    setDate(initialDateFromUrl(searchParams))
+    if (searchParams.get('view') === 'month') setMode('month')
+  }, [searchParams])
 
   const total = useMemo(
     () =>
@@ -64,22 +85,23 @@ export default function ExpensePage() {
   )
 
   useEffect(() => {
+    setCategories(emptyCats())
+    setNote('')
     setStatus(null)
-    if (!existing || (existing.date && existing.date !== date)) {
-      if (!loading) {
-        setCategories(emptyCats())
-        setNote('')
-      }
-      return
-    }
+  }, [date])
+
+  useEffect(() => {
+    if (loading) return
+    if (!existing) return
+    if (existing.date && existing.date !== date) return
     if (existing.found) {
       setCategories(catsFromEntry(existing.categories))
       setNote(existing.note || '')
-    } else if (!loading && !refreshing) {
+    } else {
       setCategories(emptyCats())
       setNote('')
     }
-  }, [existing, date, loading, refreshing])
+  }, [existing, date, loading])
 
   useEffect(() => {
     if (loadError) setStatus({ type: 'error', message: loadError })
@@ -126,7 +148,7 @@ export default function ExpensePage() {
         const verb = data.updated ? 'Updated' : 'Saved'
         setStatus({
           type: 'ok',
-          message: `${verb} · ${formatINR(data.total ?? total)}`,
+          message: data.demo ? `Demo · ${formatINR(total)}` : `${verb} · ${formatINR(data.total ?? total)}`,
         })
       }
     } catch (err) {
@@ -137,18 +159,28 @@ export default function ExpensePage() {
   }
 
   const matched = Boolean(existing && (!existing.date || existing.date === date))
-  const editing = Boolean(matched && existing.found && !(loading && !matched))
+  const editing = Boolean(matched && existing.found && !loading)
   const loadingEntry = loading && !matched
   const busy = saving || loadingEntry
 
   return (
-    <div className="page fade-in">
-      <header className="page-head">
-        <h1>{editing ? 'Edit spend' : 'Add spend'}</h1>
-        <p className="lede">Swipe tabs · swipe date row for days · pin with ★</p>
+    <div className={`page entry-page entry-${mode} fade-in`}>
+      <header className="page-head page-head-row">
+        <div>
+          <h1>{mode === 'month' ? 'Spend' : editing ? 'Edit spend' : 'Spend'}</h1>
+          <p className="lede">
+            {mode === 'month' ? 'This month’s categories & days' : 'Log a day · pin with ★'}
+          </p>
+        </div>
+        <ModeSwitch value={mode} onChange={setMode} monthLabel="Month" />
       </header>
 
-      <form className="form" onSubmit={onSubmit}>
+      {mode === 'month' ? <TabMonthView kind="expense" /> : null}
+
+      {mode === 'log' ? (
+      <>
+      <MonthTotalChip kind="expense" />
+      <form className="form form-compact" onSubmit={onSubmit}>
         <DateField value={date} onChange={setDate} disabled={busy} />
         <EntryModeBanner
           loading={loadingEntry || (refreshing && !matched)}
@@ -166,9 +198,17 @@ export default function ExpensePage() {
           {catOrder.map((c) => {
             const pinned = pins.includes(c)
             return (
-              <div key={c} className={`cat-field ${pinned ? 'is-pinned' : ''}`}>
+              <div
+                key={c}
+                className={`cat-field ${pinned ? 'is-pinned' : ''} ${focusCat === c ? 'is-focused' : ''}`}
+              >
                 <div className="cat-field-top">
-                  <span className="field-label">{CATEGORY_LABELS[c] || c}</span>
+                  <span className="field-label">
+                    <span className="cat-ico" aria-hidden>
+                      <CategoryIcon name={c} size={13} />
+                    </span>
+                    {CATEGORY_LABELS[c] || c}
+                  </span>
                   <button
                     type="button"
                     className={`pin-btn ${pinned ? 'on' : ''}`}
@@ -196,7 +236,7 @@ export default function ExpensePage() {
           })}
         </div>
 
-        <Field label="Note" hint="Optional item breakdown">
+        <Field label="Note" hint="Optional">
           <textarea
             rows={2}
             value={note}
@@ -222,15 +262,15 @@ export default function ExpensePage() {
           </div>
         ) : null}
 
-        <div className="total-bar">
+        <div className="total-bar compact">
           <span>Total</span>
           <strong>{formatINR(total)}</strong>
         </div>
 
         <StatusBanner status={status} />
 
-        <button className="btn primary" type="submit" disabled={busy}>
-          {saving ? 'Please wait…' : editing ? 'Update spend' : 'Confirm'}
+        <button className="btn primary btn-compact" type="submit" disabled={busy}>
+          {saving ? 'Saving…' : editing ? 'Update' : 'Save spend'}
         </button>
       </form>
 
@@ -238,6 +278,8 @@ export default function ExpensePage() {
         show={saving}
         label={editing ? 'Updating spend…' : 'Saving spend…'}
       />
+      </>
+      ) : null}
     </div>
   )
 }

@@ -1,9 +1,10 @@
 import { EXPENSE_CATEGORIES } from './format'
 
-const BUDGET_KEY = 'expense_month_budget_v1'
-const NOTES_KEY = 'expense_recent_notes_v1'
-const PINS_KEY = 'expense_pinned_cats_v1'
-const LAST_CAT_KEY = 'expense_last_cat_v1'
+const BUDGET_KEY = 'kharcha_month_budget_v1'
+const NOTES_KEY = 'kharcha_recent_notes_v1'
+const PINS_KEY = 'kharcha_pinned_cats_v1'
+const LAST_CAT_KEY = 'kharcha_last_cat_v1'
+const LAYOUT_KEY = 'kharcha_layout_mode_v1'
 const MAX_NOTES = 8
 
 function readJson(key, fallback) {
@@ -73,11 +74,21 @@ export function setLastUsedCategory(category) {
   writeJson(LAST_CAT_KEY, category)
 }
 
-/** Pinned first, then last-used, then the rest. */
+/** Pinned first (★), then default sheet order. No recent-to-top. */
 export function orderedCategories() {
   const pins = getPinnedCategories()
-  const last = getLastUsedCategory()
-  const rest = EXPENSE_CATEGORIES.filter((c) => !pins.includes(c) && c !== last)
-  const mid = last && !pins.includes(last) ? [last] : []
-  return [...pins, ...mid, ...rest]
+  const rest = EXPENSE_CATEGORIES.filter((c) => !pins.includes(c))
+  return [...pins, ...rest]
+}
+
+/** Desktop shell preference when the window is wide enough. */
+export function getLayoutMode() {
+  const v = readJson(LAYOUT_KEY, 'desktop')
+  return v === 'mobile' ? 'mobile' : 'desktop'
+}
+
+export function setLayoutMode(mode) {
+  const next = mode === 'mobile' ? 'mobile' : 'desktop'
+  writeJson(LAYOUT_KEY, next)
+  return next
 }

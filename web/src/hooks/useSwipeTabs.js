@@ -15,7 +15,7 @@ function shouldIgnoreTarget(target) {
  * Horizontal swipe with live drag + slide animation between bottom-nav tabs.
  * Swipe left → next tab · swipe right → previous tab.
  */
-export function useSwipeTabs() {
+export function useSwipeTabs({ enabled = true } = {}) {
   const ref = useRef(null)
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -25,6 +25,7 @@ export function useSwipeTabs() {
 
   // Slide the new page in after a committed swipe navigation.
   useEffect(() => {
+    if (!enabled) return undefined
     const el = ref.current
     if (!el || !pendingEnter.current) return undefined
 
@@ -35,6 +36,7 @@ export function useSwipeTabs() {
 
     el.style.transition = 'none'
     el.style.transform = `translate3d(${from}px,0,0)`
+    // Force layout so the browser applies the starting offset before animating in.
     void el.offsetWidth
     el.style.transition = 'transform 0.3s cubic-bezier(0.22, 1, 0.36, 1)'
     el.style.transform = 'translate3d(0,0,0)'
@@ -49,9 +51,10 @@ export function useSwipeTabs() {
       clearTimeout(t)
       el.removeEventListener('transitionend', clear)
     }
-  }, [pathname])
+  }, [pathname, enabled])
 
   useEffect(() => {
+    if (!enabled) return undefined
     const el = ref.current
     if (!el) return undefined
 
@@ -124,19 +127,20 @@ export function useSwipeTabs() {
 
       const go = () => {
         navigate(nextPath, { replace: true })
+        // enter animation runs in the pathname effect
         window.setTimeout(() => {
           animating = false
         }, 340)
       }
 
-      const onEnded = (ev) => {
+      const onEnd = (ev) => {
         if (ev.propertyName && ev.propertyName !== 'transform') return
-        el.removeEventListener('transitionend', onEnded)
+        el.removeEventListener('transitionend', onEnd)
         go()
       }
-      el.addEventListener('transitionend', onEnded)
+      el.addEventListener('transitionend', onEnd)
       window.setTimeout(() => {
-        el.removeEventListener('transitionend', onEnded)
+        el.removeEventListener('transitionend', onEnd)
         if (animating && pendingEnter.current) go()
       }, 300)
     }
@@ -165,6 +169,7 @@ export function useSwipeTabs() {
         return
       }
 
+      // Snap back
       setX(0, true)
       const clear = () => {
         el.style.transition = ''
@@ -184,7 +189,7 @@ export function useSwipeTabs() {
       el.removeEventListener('touchend', onEnd)
       el.removeEventListener('touchcancel', onEnd)
     }
-  }, [navigate])
+  }, [navigate, enabled])
 
   return ref
 }

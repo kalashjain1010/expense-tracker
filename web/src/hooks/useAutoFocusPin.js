@@ -1,42 +1,63 @@
 import { useLayoutEffect } from 'react'
 
 export function focusPinInput(input) {
-  if (!input || input.disabled) return
+  if (!input || input.disabled) return false
   try {
+    if (input.hasAttribute('readonly')) input.removeAttribute('readonly')
     input.focus({ preventScroll: true })
     const n = input.value?.length ?? 0
     if (typeof input.setSelectionRange === 'function') {
-      input.setSelectionRange(n, n)
+      try {
+        input.setSelectionRange(n, n)
+      } catch {
+        /* ignore */
+      }
     }
+    // Android Chrome / installed PWA often opens the keyboard on click()
+    try {
+      input.click()
+    } catch {
+      /* ignore */
+    }
+    return document.activeElement === input
   } catch {
-    input.focus()
+    try {
+      input.focus()
+      return document.activeElement === input
+    } catch {
+      return false
+    }
   }
 }
 
 /**
- * Focus PIN on first paint (same path as after tapping Lock).
- * useLayoutEffect runs before paint so mobile keyboards can open when allowed.
+ * Focus PIN after delayMs. On Android installed PWAs, delayed focus+click
+ * usually opens the numeric keyboard without an extra tap.
  */
-export function useAutoFocusPin(inputRef, deps = []) {
+export function useAutoFocusPin(inputRef, deps = [], { delayMs = 500, enabled = true } = {}) {
   useLayoutEffect(() => {
+    if (!enabled) return undefined
+    const el = inputRef.current
+    if (!el) return undefined
+
+    el.removeAttribute('readonly')
+
     const focusPin = () => focusPinInput(inputRef.current)
 
-    focusPin()
-    const raf = requestAnimationFrame(focusPin)
-    const t = window.setTimeout(focusPin, 0)
+    const timers = [delayMs, delayMs + 150, delayMs + 400, delayMs + 800].map((ms) =>
+      window.setTimeout(focusPin, ms),
+    )
 
-    const onShow = () => {
-      if (document.visibilityState === 'visible') focusPin()
-    }
+    const onShow = () => window.setTimeout(focusPin, delayMs)
     window.addEventListener('pageshow', onShow)
-    document.addEventListener('visibilitychange', onShow)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') window.setTimeout(focusPin, delayMs)
+    })
 
     return () => {
-      cancelAnimationFrame(raf)
-      clearTimeout(t)
+      timers.forEach(clearTimeout)
       window.removeEventListener('pageshow', onShow)
-      document.removeEventListener('visibilitychange', onShow)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- caller controls deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
 }
