@@ -116,7 +116,8 @@ export default function AppShell() {
   const [showPinSetup, setShowPinSetup] = useState(false)
   const [layoutMode, setLayoutModeState] = useState(() => getLayoutMode())
   const wideViewport = useIsDesktop()
-  const useDesktopChrome = wideViewport && layoutMode === 'desktop'
+  // Wide screens always get the side-nav shell unless the user explicitly chose phone chrome.
+  const useDesktopChrome = wideViewport && layoutMode !== 'mobile'
   const swipeTabsRef = useSwipeTabs({ enabled: !useDesktopChrome })
 
   useEffect(() => {

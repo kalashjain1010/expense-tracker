@@ -2440,25 +2440,27 @@ html[data-theme='dark'] .mode-switch {
       var(--bg);
   }
 
-  .app-shell.is-desktop {
-    --shell-max: min(1380px, calc(100vw - 2rem));
+  /* Default on wide screens: full-bleed side-nav shell (not a centered phone column). */
+  .app-shell:not(.is-mobile) {
+    --shell-max: 100%;
     --side-w: 220px;
     width: 100%;
-    max-width: var(--shell-max);
-    margin: 0 auto;
+    max-width: none;
+    margin: 0;
     min-height: 100dvh;
     padding: 1.15rem 1.25rem 1.5rem;
     display: grid;
     grid-template-columns: var(--side-w) minmax(0, 1fr);
     gap: 1.15rem;
     align-items: start;
+    box-sizing: border-box;
   }
 
-  .app-shell.is-desktop .bottom-nav {
+  .app-shell:not(.is-mobile) .bottom-nav {
     display: none;
   }
 
-  .app-shell.is-desktop .topbar {
+  .app-shell:not(.is-mobile) .topbar {
     display: none;
   }
 
@@ -2503,7 +2505,7 @@ html[data-theme='dark'] .mode-switch {
     border-color: rgba(26, 92, 69, 0.25);
   }
 
-  .side-nav {
+  .app-shell:not(.is-mobile) .side-nav {
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -2613,7 +2615,7 @@ html[data-theme='dark'] .mode-switch {
   }
 
   /* Home / entry desktop layouts — only when desktop chrome is on */
-  .app-shell.is-desktop .home-page {
+  .app-shell:not(.is-mobile) .home-page {
     display: grid;
     grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
     gap: 0.95rem 1rem;
@@ -2621,46 +2623,46 @@ html[data-theme='dark'] .mode-switch {
     width: 100%;
   }
 
-  .app-shell.is-desktop .home-page > * {
+  .app-shell:not(.is-mobile) .home-page > * {
     min-width: 0;
   }
 
-  .app-shell.is-desktop .home-page > .home-hero {
+  .app-shell:not(.is-mobile) .home-page > .home-hero {
     grid-column: 1 / -1;
   }
 
-  .app-shell.is-desktop .home-page > .panel-chart {
+  .app-shell:not(.is-mobile) .home-page > .panel-chart {
     grid-column: 1;
     grid-row: span 2;
   }
 
-  .app-shell.is-desktop .home-page > .panel-cats {
+  .app-shell:not(.is-mobile) .home-page > .panel-cats {
     grid-column: 2;
   }
 
-  .app-shell.is-desktop .home-page > .panel-month-pick {
+  .app-shell:not(.is-mobile) .home-page > .panel-month-pick {
     grid-column: 2;
   }
 
-  .app-shell.is-desktop .home-page > .panel-latest {
+  .app-shell:not(.is-mobile) .home-page > .panel-latest {
     grid-column: 1 / -1;
   }
 
-  .app-shell.is-desktop .home-page > .panel-chart .chart-wrap {
+  .app-shell:not(.is-mobile) .home-page > .panel-chart .chart-wrap {
     min-height: 300px;
   }
 
-  .app-shell.is-desktop .home-page .activity-row {
+  .app-shell:not(.is-mobile) .home-page .activity-row {
     grid-template-columns: 40px 1fr auto auto;
     padding: 0.78rem 0.35rem;
     border-radius: 12px;
   }
 
-  .app-shell.is-desktop .home-page .search-field {
+  .app-shell:not(.is-mobile) .home-page .search-field {
     max-width: 360px;
   }
 
-  .app-shell.is-desktop .home-hero {
+  .app-shell:not(.is-mobile) .home-hero {
     display: grid;
     grid-template-columns: minmax(0, 1.35fr) minmax(220px, 0.75fr);
     grid-template-areas:
@@ -2673,30 +2675,30 @@ html[data-theme='dark'] .mode-switch {
     align-items: center;
   }
 
-  .app-shell.is-desktop .home-hero-top {
+  .app-shell:not(.is-mobile) .home-hero-top {
     grid-area: top;
     margin-bottom: 0;
   }
 
-  .app-shell.is-desktop .home-hero-main {
+  .app-shell:not(.is-mobile) .home-hero-main {
     grid-area: main;
     margin-bottom: 0;
     align-self: center;
   }
 
-  .app-shell.is-desktop .home-hero-greet {
+  .app-shell:not(.is-mobile) .home-hero-greet {
     font-size: 1.7rem;
   }
 
-  .app-shell.is-desktop .home-hero-amount {
+  .app-shell:not(.is-mobile) .home-hero-amount {
     font-size: 2.55rem;
   }
 
-  .app-shell.is-desktop .home-hero-meta {
+  .app-shell:not(.is-mobile) .home-hero-meta {
     max-width: none;
   }
 
-  .app-shell.is-desktop .home-stat-strip {
+  .app-shell:not(.is-mobile) .home-stat-strip {
     grid-area: stats;
     grid-template-columns: 1fr;
     max-width: none;
@@ -2706,16 +2708,16 @@ html[data-theme='dark'] .mode-switch {
     align-self: stretch;
   }
 
-  .app-shell.is-desktop .home-stat {
+  .app-shell:not(.is-mobile) .home-stat {
     padding: 0.7rem 0.75rem;
     border-radius: 14px;
   }
 
-  .app-shell.is-desktop .home-stat-copy strong {
+  .app-shell:not(.is-mobile) .home-stat-copy strong {
     font-size: 1rem;
   }
 
-  .app-shell.is-desktop .home-cta-row {
+  .app-shell:not(.is-mobile) .home-cta-row {
     grid-area: cta;
     max-width: none;
     width: 100%;
@@ -2724,72 +2726,72 @@ html[data-theme='dark'] .mode-switch {
     gap: 0.5rem;
   }
 
-  .app-shell.is-desktop .home-cta {
+  .app-shell:not(.is-mobile) .home-cta {
     min-height: 42px;
     font-size: 0.82rem;
     padding: 0.55rem 1rem;
     border-radius: 12px;
   }
 
-  .app-shell.is-desktop .home-cta.primary {
+  .app-shell:not(.is-mobile) .home-cta.primary {
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.16);
   }
 
-  .app-shell.is-desktop .panel {
+  .app-shell:not(.is-mobile) .panel {
     padding: 1.15rem 1.2rem;
   }
 
-  .app-shell.is-desktop .chart-wrap {
+  .app-shell:not(.is-mobile) .chart-wrap {
     min-height: 260px;
   }
 
-  .app-shell.is-desktop .entry-page .form,
-  .app-shell.is-desktop .entry-page .form-compact {
+  .app-shell:not(.is-mobile) .entry-page .form,
+  .app-shell:not(.is-mobile) .entry-page .form-compact {
     max-width: none;
     width: 100%;
   }
 
-  .app-shell.is-desktop .entry-page.entry-log {
+  .app-shell:not(.is-mobile) .entry-page.entry-log {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(260px, 0.4fr);
     gap: 1rem 1.25rem;
     align-items: start;
   }
 
-  .app-shell.is-desktop .entry-page.entry-log > .page-head {
+  .app-shell:not(.is-mobile) .entry-page.entry-log > .page-head {
     grid-column: 1 / -1;
   }
 
-  .app-shell.is-desktop .entry-page.entry-log > .month-total-chip,
-  .app-shell.is-desktop .entry-page.entry-log > .due-card {
+  .app-shell:not(.is-mobile) .entry-page.entry-log > .month-total-chip,
+  .app-shell:not(.is-mobile) .entry-page.entry-log > .due-card {
     grid-column: 2;
     grid-row: 2;
     max-width: none;
     width: 100%;
   }
 
-  .app-shell.is-desktop .entry-page.entry-log > .form,
-  .app-shell.is-desktop .entry-page.entry-log > form {
+  .app-shell:not(.is-mobile) .entry-page.entry-log > .form,
+  .app-shell:not(.is-mobile) .entry-page.entry-log > form {
     grid-column: 1;
     grid-row: 2 / span 4;
   }
 
-  .app-shell.is-desktop .entry-page.entry-month {
+  .app-shell:not(.is-mobile) .entry-page.entry-month {
     display: flex;
     flex-direction: column;
     gap: 1rem;
   }
 
-  .app-shell.is-desktop .entry-page.entry-month > .due-card {
+  .app-shell:not(.is-mobile) .entry-page.entry-month > .due-card {
     max-width: 480px;
   }
 
-  .app-shell.is-desktop .cat-grid {
+  .app-shell:not(.is-mobile) .cat-grid {
     grid-template-columns: repeat(4, 1fr);
     gap: 0.85rem 1rem;
   }
 
-  .app-shell.is-desktop .cat-field input {
+  .app-shell:not(.is-mobile) .cat-field input {
     padding: 0.7rem 0.8rem;
     font-size: 0.95rem;
   }
@@ -2889,33 +2891,33 @@ html[data-theme='dark'] .mode-switch {
 }
 
 @media (min-width: 1200px) {
-  .app-shell.is-desktop {
-    --shell-max: min(1480px, calc(100vw - 2.5rem));
+  .app-shell:not(.is-mobile) {
+    --shell-max: 100%;
     --side-w: 236px;
     gap: 1.35rem;
     padding: 1.35rem 1.5rem 1.75rem;
   }
 
-  .app-shell.is-desktop .home-page {
+  .app-shell:not(.is-mobile) .home-page {
     grid-template-columns: minmax(0, 1.3fr) minmax(300px, 0.7fr);
     gap: 1.1rem 1.2rem;
   }
 
-  .app-shell.is-desktop .home-hero {
+  .app-shell:not(.is-mobile) .home-hero {
     grid-template-columns: minmax(0, 1.5fr) minmax(240px, 0.7fr);
     gap: 1rem 1.5rem;
     padding: 1.4rem 1.55rem 1.3rem;
   }
 
-  .app-shell.is-desktop .home-hero-amount {
+  .app-shell:not(.is-mobile) .home-hero-amount {
     font-size: 2.75rem;
   }
 
-  .app-shell.is-desktop .home-cta-row {
+  .app-shell:not(.is-mobile) .home-cta-row {
     grid-template-columns: repeat(3, minmax(150px, 220px));
   }
 
-  .app-shell.is-desktop .entry-page.entry-log {
+  .app-shell:not(.is-mobile) .entry-page.entry-log {
     grid-template-columns: minmax(0, 1fr) minmax(280px, 0.38fr);
   }
 }

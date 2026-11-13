@@ -81,10 +81,16 @@ export function orderedCategories() {
   return [...pins, ...rest]
 }
 
-/** Desktop shell preference when the window is wide enough. */
+/** Desktop shell preference when the window is wide enough. Defaults to desktop. */
 export function getLayoutMode() {
-  const v = readJson(LAYOUT_KEY, 'desktop')
-  return v === 'mobile' ? 'mobile' : 'desktop'
+  try {
+    const raw = localStorage.getItem(LAYOUT_KEY)
+    if (raw == null) return 'desktop'
+    const v = JSON.parse(raw)
+    return v === 'mobile' ? 'mobile' : 'desktop'
+  } catch {
+    return 'desktop'
+  }
 }
 
 export function setLayoutMode(mode) {
