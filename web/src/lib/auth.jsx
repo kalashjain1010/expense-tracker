@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { fetchMe, loginUrl, logout as apiLogout, polishSheet } from './api'
+import { DEMO_USER } from './demoData'
 import { cachePinUser, clearPinSession } from './pinLock'
 import { clearAllCaches } from './queryCache'
 
@@ -11,11 +12,19 @@ const AuthContext = createContext({
   refresh: async () => {},
 })
 
+const DEMO_UI = import.meta.env.DEV && import.meta.env.VITE_DEMO_UI === '1'
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
   async function refresh() {
+    if (import.meta.env.DEV && import.meta.env.VITE_DEMO_UI === '1') {
+      setUser(DEMO_USER)
+      cachePinUser(DEMO_USER)
+      setLoading(false)
+      return
+    }
     try {
       const data = await fetchMe()
       setUser(data.user || null)
@@ -37,15 +46,22 @@ export function AuthProvider({ children }) {
   }, [])
 
   function login() {
+    if (DEMO_UI) {
+      setUser(DEMO_USER)
+      cachePinUser(DEMO_USER)
+      return
+    }
     window.location.href = loginUrl()
   }
 
   async function logout() {
     const uid = user?.id
-    try {
-      await apiLogout()
-    } catch {
-      /* ignore */
+    if (!DEMO_UI) {
+      try {
+        await apiLogout()
+      } catch {
+        /* ignore */
+      }
     }
     clearAllCaches()
     if (uid) clearPinSession(uid)

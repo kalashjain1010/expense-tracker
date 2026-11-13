@@ -565,7 +565,7 @@ export default function Dashboard() {
         )}
       </section>
 
-      {data.demo && <p className="muted center tip">Demo numbers — connect Apps Script for live data.</p>}
+      {data.demo && <p className="muted center tip">Demo numbers — sign in with Google for your live sheet.</p>}
     </div>
   )
 }

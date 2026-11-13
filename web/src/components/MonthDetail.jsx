@@ -176,7 +176,7 @@ export default function MonthDetail({ month, onClose, initialTab = 'spend' }) {
             ) : null}
           </div>
 
-          {data.demo ? <p className="muted tip center">Demo month — connect Apps Script for live days.</p> : null}
+          {data.demo ? <p className="muted tip center">Demo month — sign in with Google for live days.</p> : null}
         </>
       ) : null}
     </section>

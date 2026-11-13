@@ -1,3 +1,4 @@
+import { demoEntry, demoMonthDetail, demoSummary } from './demoData'
 import { isFutureISO } from './format'
 import { enqueueWrite, shouldQueueError } from './offlineQueue'
 import { invalidateAfterWrite } from './queryCache'
@@ -59,14 +60,23 @@ export async function clearPin(pin) {
 }
 
 export async function fetchSummary() {
+  if (import.meta.env.DEV && import.meta.env.VITE_DEMO_UI === '1') {
+    return demoSummary()
+  }
   return api('/api/summary')
 }
 
 export async function fetchMonthDetail(month) {
+  if (import.meta.env.DEV && import.meta.env.VITE_DEMO_UI === '1') {
+    return demoMonthDetail(month)
+  }
   return api(`/api/month?month=${encodeURIComponent(month)}`)
 }
 
 export async function fetchEntry(type, date) {
+  if (import.meta.env.DEV && import.meta.env.VITE_DEMO_UI === '1') {
+    return demoEntry(type, date)
+  }
   return api(`/api/entry?type=${encodeURIComponent(type)}&date=${encodeURIComponent(date)}`)
 }
 
@@ -86,6 +96,11 @@ export async function addExpense(payload, { allowQueue = true } = {}) {
     total: Object.values(categories).reduce((s, v) => s + (Number(v) || 0), 0),
     categories,
     note: payload.note || '',
+  }
+  if (import.meta.env.DEV && import.meta.env.VITE_DEMO_UI === '1') {
+    const data = { ...optimistic, demo: true, updated: false }
+    invalidateAfterWrite({ type: 'expense', date: payload.date, entryPatch: data })
+    return data
   }
   try {
     const data = await api('/api/expense', { method: 'POST', body: JSON.stringify(payload) })
@@ -110,16 +125,25 @@ export async function addExpense(payload, { allowQueue = true } = {}) {
 
 export async function addIncome(payload, { allowQueue = true } = {}) {
   if (isFutureISO(payload.date)) throw new Error('Future dates are not allowed')
+  const you = Number(payload.you ?? payload.kalash) || 0
+  const partner = Number(payload.partner ?? payload.mummy) || 0
   const optimistic = {
     found: true,
     type: 'income',
     date: payload.date,
     row: 0,
     count: 1,
-    total: (Number(payload.you) || 0) + (Number(payload.partner) || 0),
-    you: payload.you,
-    partner: payload.partner,
+    total: you + partner,
+    you,
+    partner,
+    kalash: you,
+    mummy: partner,
     source: payload.source || '',
+  }
+  if (import.meta.env.DEV && import.meta.env.VITE_DEMO_UI === '1') {
+    const data = { ...optimistic, demo: true, updated: false }
+    invalidateAfterWrite({ type: 'income', date: payload.date, entryPatch: data })
+    return data
   }
   try {
     const data = await api('/api/income', { method: 'POST', body: JSON.stringify(payload) })
@@ -152,6 +176,11 @@ export async function addCreditCard(payload, { allowQueue = true } = {}) {
     count: 1,
     total: payload.total,
     items: payload.items || '',
+  }
+  if (import.meta.env.DEV && import.meta.env.VITE_DEMO_UI === '1') {
+    const data = { ...optimistic, demo: true, updated: false }
+    invalidateAfterWrite({ type: 'credit', date: payload.date, entryPatch: data })
+    return data
   }
   try {
     const data = await api('/api/credit', { method: 'POST', body: JSON.stringify(payload) })
